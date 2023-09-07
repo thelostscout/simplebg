@@ -6,15 +6,19 @@ import bgmol
 from lightning_bg.architectures import *
 from lightning_bg.utils import dataset_setter
 
-file_dir = os.path.dirname(os.path.realpath(__file__))
-data_path = os.path.realpath(file_dir + "/../data/") + "/"
-
-
 if __name__ == "__main__":
     param_path = sys.argv[1]
     param_name = param_path[:-5]
     with open(param_path) as f:
         params = yaml.load(f, yaml.FullLoader)  # load the parameters
+
+    data_path = params.get("data_path", None)
+    if not data_path:
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        data_path = os.path.realpath(file_dir + "/../data/") + "/"
+    else:
+        data_path = os.path.realpath(data_path) + "/"
+
     ModelClass = get_network_by_name(params["network_name"])
     ParamClass = BaseHParams
     hparams = ParamClass(**params["network_params"])
