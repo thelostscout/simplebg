@@ -7,6 +7,7 @@ import torch
 import torch.distributions as D
 import torch.nn as nn
 from FrEIA.utils import force_to
+from abc import ABC, abstractmethod
 
 
 def get_network_by_name(name: str):
@@ -18,6 +19,8 @@ def get_network_by_name(name: str):
         return RNVPvar
     elif name == "RNVPrvkl":
         return RNVPrvkl
+    elif name == "RQSfwkl":
+        return RQSfwkl
     else:
         raise ValueError(f"Unknown network name {name}")
 
@@ -29,7 +32,7 @@ class BaseHParams(lt.TrainableHParams):
     latent_target_distribution: dict
 
 
-class BaseRNVP(lt.Trainable):
+class BaseTrainable(lt.Trainable, ABC):
     hparams: BaseHParams
     needs_energy_function = False
 
@@ -38,6 +41,10 @@ class BaseRNVP(lt.Trainable):
         self.inn = self.configure_inn()
         self.q = self.latent_distribution_constructor(**hparams.latent_target_distribution)
 
+    @abstractmethod
+    def configure_inn(self):
+        raise NotImplementedError
+
     def latent_distribution_constructor(self, **kwargs):
         n_dims = self.hparams.n_dims
         name = kwargs['name']
@@ -45,27 +52,6 @@ class BaseRNVP(lt.Trainable):
         if name == "Normal":
             sigma = kwargs['sigma']
             return D.MultivariateNormal(torch.zeros(n_dims), sigma * torch.eye(n_dims))
-
-    def configure_inn(self):
-        subnet_width = self.hparams.subnet_width
-        inn_depth = self.hparams.inn_depth
-        n_dims = self.hparams.n_dims
-        inn = Ff.SequenceINN(n_dims)
-        inn.append(Fm.ActNorm)
-        for k in range(inn_depth):
-            inn.append(Fm.RNVPCouplingBlock, subnet_constructor=partial(self.subnet_constructor, subnet_width))
-        return inn
-
-    @staticmethod
-    def subnet_constructor(subnet_width, dims_in, dims_out):
-        block = nn.Sequential(nn.Linear(dims_in, subnet_width), nn.ReLU(),
-                              nn.Linear(subnet_width, subnet_width), nn.ReLU(),
-                              nn.Linear(subnet_width, subnet_width), nn.ReLU(),
-                              nn.Linear(subnet_width, dims_out))
-
-        block[-1].weight.data.zero_()
-        block[-1].bias.data.zero_()
-        return block
 
     def generate_samples(self, size):
         with torch.no_grad():
@@ -88,6 +74,29 @@ class BaseRNVP(lt.Trainable):
     def cpu(self):
         # Delegate to .to(...) as it moves distributions, too
         return self.to("cpu")
+
+
+class BaseRNVP(BaseTrainable):
+    def configure_inn(self):
+        subnet_width = self.hparams.subnet_width
+        inn_depth = self.hparams.inn_depth
+        n_dims = self.hparams.n_dims
+        inn = Ff.SequenceINN(n_dims)
+        inn.append(Fm.ActNorm)
+        for k in range(inn_depth):
+            inn.append(Fm.RNVPCouplingBlock, subnet_constructor=partial(self.subnet_constructor, subnet_width))
+        return inn
+
+    @staticmethod
+    def subnet_constructor(subnet_width, dims_in, dims_out):
+        block = nn.Sequential(nn.Linear(dims_in, subnet_width), nn.ReLU(),
+                              nn.Linear(subnet_width, subnet_width), nn.ReLU(),
+                              nn.Linear(subnet_width, subnet_width), nn.ReLU(),
+                              nn.Linear(subnet_width, dims_out))
+
+        block[-1].weight.data.zero_()
+        block[-1].bias.data.zero_()
+        return block
 
 
 class BaseRNVPEnergy(BaseRNVP):
@@ -217,4 +226,40 @@ class RNVPrvkl(BaseRNVPEnergy):
         return dict(
             loss=loss,
             left_side_ratio=ratio
+        )
+
+
+class BaseRQS(BaseTrainable):
+    def configure_inn(self):
+        subnet_width = self.hparams.subnet_width
+        inn_depth = self.hparams.inn_depth
+        n_dims = self.hparams.n_dims
+        inn = Ff.SequenceINN(n_dims)
+        inn.append(Fm.ActNorm)
+        for k in range(inn_depth):
+            inn.append(Fm.RationalQuadraticSpline, subnet_constructor=partial(self.subnet_constructor, subnet_width))
+        return inn
+
+    @staticmethod
+    def subnet_constructor(subnet_width, dims_in, dims_out):
+        block = nn.Sequential(nn.Linear(dims_in, subnet_width), nn.ReLU(),
+                              nn.Linear(subnet_width, subnet_width), nn.ReLU(),
+                              nn.Linear(subnet_width, subnet_width), nn.ReLU(),
+                              nn.Linear(subnet_width, dims_out))
+
+        block[-1].weight.data.zero_()
+        block[-1].bias.data.zero_()
+        return block
+
+
+class RQSfwkl(BaseRQS):
+    def forward_kl_loss(self, z, log_det_JF):
+        log_likelihood = self.q.log_prob(z) + log_det_JF
+        return - log_likelihood
+
+    def compute_metrics(self, batch, batch_idx):
+        z, log_det_JF = self.inn(batch)
+        loss = self.forward_kl_loss(z, log_det_JF).mean()
+        return dict(
+            loss=loss,
         )

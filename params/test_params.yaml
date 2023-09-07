@@ -1,5 +1,4 @@
 network_name: "RNVPartfwkl"
-load_from_checkpoint: 165
 
 network_params: {
   inn_depth: 24,
