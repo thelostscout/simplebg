@@ -1,4 +1,4 @@
-network_name: "RNVPartfwkl"
+network_name: "RNVPpseudofwkl"
 
 network_params: {
   inn_depth: 24,

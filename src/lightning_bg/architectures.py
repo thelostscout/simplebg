@@ -13,8 +13,8 @@ from abc import ABC, abstractmethod
 def get_network_by_name(name: str):
     if name == "RNVPfwkl":
         return RNVPfwkl
-    elif name == "RNVPartfwkl":
-        return RNVPartfwkl
+    elif name == "RNVPpseudofwkl":
+        return RNVPpseudofwkl
     elif name == "RNVPvar":
         return RNVPvar
     elif name == "RNVPrvkl":
@@ -52,6 +52,14 @@ class BaseTrainable(lt.Trainable, ABC):
         if name == "Normal":
             sigma = kwargs['sigma']
             return D.MultivariateNormal(torch.zeros(n_dims), sigma * torch.eye(n_dims))
+
+        if name == "Bimodal":
+            sigmas = torch.tensor(kwargs['sigmas'])[:, None] * torch.eye(n_dims)
+            mus = torch.zeros((2, n_dims))
+            mus[0, 0], mus[1, 0] = kwargs['mus']
+            gausses = D.MultivariateNormal(mus, sigmas)
+            weights = D.Categorical(torch.tensor([1, 1]))
+            return D.MixtureSameFamily(weights, gausses)
 
     def generate_samples(self, size):
         with torch.no_grad():
@@ -126,7 +134,7 @@ class RNVPfwkl(BaseRNVP):
         )
 
 
-class RNVPartfwkl(BaseRNVPEnergy):
+class RNVPpseudofwkl(BaseRNVPEnergy):
     hparams: BaseHParams
 
     def art_fwkl_loss(self, xG):
@@ -209,9 +217,9 @@ class RNVPrvkl(BaseRNVPEnergy):
 
     def rvkl_loss(self, z):
         xG, log_det_JG = self.inn(z, rev=True)
-        log_pB = - self.pB_log_prob(xG)
-        log_pG = self.q.log_prob(z) - log_det_JG
-        return log_pG - log_pB
+        log_pB = self.pB_log_prob(xG)
+        # log_pG = self.q.log_prob(z) - log_det_JG
+        return - log_pB - log_det_JG
 
     def left_side_ratio(self, z):
         xG = self.inn(z, rev=True)[0]
@@ -221,11 +229,11 @@ class RNVPrvkl(BaseRNVPEnergy):
     def compute_metrics(self, batch, batch_idx) -> dict:
         z = self.q.sample((self.hparams.batch_size,))
         loss = self.rvkl_loss(z).mean()
-        ratio = self.left_side_ratio(z)
+        # ratio = self.left_side_ratio(z)
 
         return dict(
             loss=loss,
-            left_side_ratio=ratio
+            # left_side_ratio=ratio
         )
 
 
