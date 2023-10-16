@@ -16,6 +16,7 @@ network_params: {
     sigma: 1.,
   },
   gradient_clip: 10.0,
+#  num_workers: 1,
 }
 
 training_params: {

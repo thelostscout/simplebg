@@ -5,6 +5,7 @@ import bgmol
 
 from lightning_bg.architectures import *
 from lightning_bg.utils import dataset_setter
+import threading
 
 
 def run_experiment(experiment_params, experiment_param_name, experiment_data_path):
@@ -16,6 +17,7 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
     # import alanine data
     is_data_here = os.path.exists(experiment_data_path + "/Ala2TSF300.npy")
     ala_data = bgmol.datasets.Ala2TSF300(download=not is_data_here, read=True, root=experiment_data_path)
+    energy_model = ala_data.get_energy_model(n_workers=1)
     system = ala_data.system
     coordinates = ala_data.coordinates
 
@@ -27,7 +29,7 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
     # create model
     if ModelClass.needs_energy_function:
         model = ModelClass(
-            hparams, system.energy_model.energy, train_data=train_data, val_data=val_data
+            hparams, energy_model.energy, train_data=train_data, val_data=val_data
         )
     else:
         model = ModelClass(
@@ -65,3 +67,7 @@ if __name__ == "__main__":
         data_path = os.path.realpath(data_path) + "/"
 
     run_experiment(params, param_name, data_path)
+    for thread in threading.enumerate():
+        print(thread.name)
+    print("done")
+    sys.exit(0)
