@@ -11,22 +11,22 @@ from lightning_bg.utils import dataset_setter
 
 
 def run_experiment(experiment_params, experiment_param_name, experiment_data_path):
-    # load model and corresponding param classes
-    ModelClass = get_network_by_name(experiment_params["network_name"])
-    ParamClass = BaseHParams
-    hparams = ParamClass(**experiment_params["network_params"])
-
     # import data
-    if params['data'] == "Dialanine":
+    if experiment_params['data'] == "Dialanine":
         # import alanine data
         is_data_here = os.path.exists(experiment_data_path + "/Molecules/Ala2TSF300.npy")
-        ala_data = bgmol.datasets.Ala2TSF300(download=not is_data_here, read=True, root=experiment_data_path)
+        ala_data = bgmol.datasets.Ala2TSF300(
+            download=not is_data_here, read=True, root=experiment_data_path + "Molecules/"
+        )
+        # define system & energy model
         system = ala_data.system
         energy_model = system.reinitialize_energy_model(temperature=300., n_workers=1)
         coordinates = ala_data.coordinates
+        lightning_logs = experiment_data_path + "lightning_logs/Dialanine/"
     else:
-        molecule_path = data_path + "/Molecules" + params['data']
+        molecule_path = experiment_data_path + "/Molecules" + params['data']
 
+        # read the top.pdb
         with open(molecule_path + "/top.pdb", 'r') as file:
             lines = file.readlines()
             lastline = lines[-3]
@@ -40,11 +40,20 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
 
         # read coordinates
         traj = mdtraj.load_hdf5(molecule_path + "/traj.h5")
-        print(traj.xyz.shape)
         coordinates = traj.xyz
+        assert coordinates.shape[-2] == n_atoms, (f"pdb file ({n_atoms}) atoms does not match the "
+                                                  f"data ({coordinates.shape[-2]}).")
+        lightning_logs = experiment_data_path + "lightning_logs/OppA/" + experiment_params['data'][-4:]
+    # determine n_dims
+    experiment_params['network_params']['n_dims'] = len(coordinates[0].flat)
 
-    # prepare the data
-    train_split = experiment_params["training_params"]["train_split"]
+    # load model class and corresponding param class
+    ModelClass = get_network_by_name(experiment_params['network_name'])
+    ParamClass = BaseHParams
+    hparams = ParamClass(**experiment_params['network_params'])
+
+    # prepare the dataloaders
+    train_split = experiment_params['training_params']['train_split']
     train_data, val_data, test_data = dataset_setter(
         coordinates, system, val_split=(.8 - train_split), test_split=.2, seed=42
     )
@@ -58,15 +67,15 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
             hparams, train_data=train_data, val_data=val_data
         )
     # load model state from previous experiment
-    load_from_checkpoint = experiment_params.get("load_from_checkpoint", None)
+    load_from_checkpoint = experiment_params.get('load_from_checkpoint', None)
     if load_from_checkpoint is not None:
         print(f"loading state_dict from data/lightning_logs/{load_from_checkpoint}/checkpoints/last.ckpt")
         checkpoint = torch.load(experiment_data_path + f"/lightning_logs/{load_from_checkpoint}/checkpoints/last.ckpt")
         model.load_state_dict(checkpoint['state_dict'])
     # fit the model
     model.fit(
-        trainer_kwargs=experiment_params["trainer_kwargs"],
-        logger_kwargs=dict(save_dir=experiment_data_path + f"lightning_logs", name=experiment_param_name)
+        trainer_kwargs=experiment_params['trainer_kwargs'],
+        logger_kwargs=dict(save_dir=lightning_logs, name=experiment_param_name)
     )
     pass
 

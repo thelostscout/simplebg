@@ -1,4 +1,4 @@
-data: "/OppA/Peptides/1b4z"
+data: "Dialanine"
 network_name: "RNVPfwkl"
 
 
@@ -7,7 +7,7 @@ network_params: {
   subnet_width: 256,
   batch_size: 1024,
   max_epochs:  20,
-  n_dims:  177,
+  n_dims:  66,
   optimizer: {
     name: "Adam",
     lr: 3.e-5,
