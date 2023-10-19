@@ -47,6 +47,7 @@ if __name__ == "__main__":
     params["training_params"]["dataset"] = dataset
 
     # Create TrainableNetwork hyperparameters
+    # noinspection PyCallingNonCallable
     params["training_params"]["network_params"] = ParamClass(
         **params.get("network_params", {})
     )
