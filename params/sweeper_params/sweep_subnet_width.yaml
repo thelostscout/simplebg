@@ -1,12 +1,13 @@
-molecule: "/OppA/Peptides/1b4z/"
+to_sweep: "network_params:subnet_width"
+molecule: "Dialanine"
 network_name: "RNVPfwkl"
-
 
 network_params: {
   inn_depth: 24,
-  subnet_width: 256,
+  subnet_width: [64, 128, 256, 512, 1024],
   batch_size: 1024,
-  max_epochs:  200,
+  max_epochs:  20,
+  n_dims:  66,
   optimizer: {
     name: "Adam",
     lr: 3.e-5,
@@ -24,5 +25,5 @@ training_params: {
 }
 
 trainer_kwargs: {
-  overfit_batches: 1
+#  overfit_batches: 1
 }

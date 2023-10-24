@@ -1,5 +1,5 @@
 network_name: "RNVPfwkl"
-load_from_checkpoint: "RNVPfwkl2700"
+#load_from_checkpoint: "RNVPfwkl2700"
 
 network_params: {
   inn_depth: 24,

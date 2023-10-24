@@ -2,37 +2,35 @@ import os
 import sys
 
 import bgmol
+from bgmol.systems.peptide import peptide
 import mdtraj
 import yaml
-from bgmol.systems.peptide import peptide
 
 from lightning_bg.architectures import *
 from lightning_bg.utils import dataset_setter
 
 
 def run_experiment(experiment_params, experiment_param_name, experiment_data_path):
+    # set log path
+    lightning_logs = os.path.join(experiment_data_path, "lightning_logs", experiment_params['molecule'].lstrip("/"))
     # import data
-    if experiment_params['data'] == "Dialanine":
+    molecule_path = os.path.join(experiment_data_path, "Molecules", params['molecule'].lstrip("/"))
+    if experiment_params['molecule'] == "Dialanine":
         # import alanine data
-        is_data_here = os.path.exists(experiment_data_path + "/Molecules/Ala2TSF300.npy")
-        ala_data = bgmol.datasets.Ala2TSF300(
-            download=not is_data_here, read=True, root=experiment_data_path + "Molecules/"
-        )
+        is_data_here = os.path.exists(molecule_path + "/Ala2TSF300.npy")
+        ala_data = bgmol.datasets.Ala2TSF300(download=not is_data_here, read=True, root=molecule_path)
         # define system & energy model
         system = ala_data.system
         energy_model = system.reinitialize_energy_model(temperature=300., n_workers=1)
         coordinates = ala_data.coordinates
-        lightning_logs = experiment_data_path + "lightning_logs/Dialanine/"
     else:
-        molecule_path = experiment_data_path + "/Molecules" + params['data']
-
         # read the top.pdb
-        with open(molecule_path + "/top.pdb", 'r') as file:
+        with open(molecule_path.rstrip("/") + "/top.pdb", 'r') as file:
             lines = file.readlines()
             lastline = lines[-3]
             n_atoms = int(lastline[4:11].strip())
             n_res = int(lastline[22:26].strip())
-            print(n_atoms, n_res)
+            print(f"Number of atoms: {n_atoms}, residues: {n_res}")
 
         # define system & energy model
         system = peptide(short=False, n_atoms=n_atoms, n_res=n_res, filepath=molecule_path)
@@ -43,7 +41,6 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
         coordinates = traj.xyz
         assert coordinates.shape[-2] == n_atoms, (f"pdb file ({n_atoms}) atoms does not match the "
                                                   f"data ({coordinates.shape[-2]}).")
-        lightning_logs = experiment_data_path + "lightning_logs/OppA/" + experiment_params['data'][-4:]
     # determine n_dims
     experiment_params['network_params']['n_dims'] = len(coordinates[0].flat)
 
@@ -57,6 +54,7 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
     train_data, val_data, test_data = dataset_setter(
         coordinates, system, val_split=(.8 - train_split), test_split=.2, seed=42
     )
+    print(f"{len(train_data)} training data, {len(val_data)} validation data, {len(test_data)} test data.")
     # create model
     if ModelClass.needs_energy_function:
         model = ModelClass(
@@ -72,6 +70,10 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
         print(f"loading state_dict from data/lightning_logs/{load_from_checkpoint}/checkpoints/last.ckpt")
         checkpoint = torch.load(experiment_data_path + f"/lightning_logs/{load_from_checkpoint}/checkpoints/last.ckpt")
         model.load_state_dict(checkpoint['state_dict'])
+    if "OppA" in experiment_param_name:  # TODO: this is ugly. find smth better
+        i = experiment_param_name.rfind("/")
+        experiment_param_name = experiment_param_name[i+1:]
+
     # fit the model
     model.fit(
         trainer_kwargs=experiment_params['trainer_kwargs'],

@@ -1,4 +1,4 @@
-molecule: "/OppA/Peptides/1b4z/"
+molecule: "/OppA/Peptides/1b4z"
 network_name: "RNVPfwkl"
 
 
@@ -6,7 +6,7 @@ network_params: {
   inn_depth: 24,
   subnet_width: 256,
   batch_size: 1024,
-  max_epochs:  200,
+  max_epochs:  20000,
   optimizer: {
     name: "Adam",
     lr: 3.e-5,
@@ -24,5 +24,5 @@ training_params: {
 }
 
 trainer_kwargs: {
-  overfit_batches: 1
+#  overfit_batches: 1
 }

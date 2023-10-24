@@ -1,4 +1,5 @@
 to_sweep: "network_params:inn_depth"
+molecule: "Dialanine"
 network_name: "RNVPfwkl"
 
 network_params: {

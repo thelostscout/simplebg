@@ -2,11 +2,13 @@
 #SBATCH --partition=single
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=5
-#SBATCH --time=01:00:00
+#SBATCH --time=16:00:00
 #SBATCH --mem=16G
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=kortkamp@stud.uni-heidelberg.de
+
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
 
 . ~/.bashrc
 echo "$@"
