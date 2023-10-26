@@ -219,7 +219,7 @@ class RNVPrvkl(BaseRNVPEnergy):
         xG, log_det_JG = self.inn(z, rev=True)
         log_pB = self.pB_log_prob(xG)
         # log_pG = self.q.log_prob(z) - log_det_JG
-        return - log_pB - log_det_JG
+        return - log_pB - log_det_JG, log_pB, log_det_JG
 
     def left_side_ratio(self, z):
         xG = self.inn(z, rev=True)[0]
@@ -228,11 +228,14 @@ class RNVPrvkl(BaseRNVPEnergy):
     # noinspection PyTypeChecker
     def compute_metrics(self, batch, batch_idx) -> dict:
         z = self.q.sample((self.hparams.batch_size,))
-        loss = self.rvkl_loss(z).mean()
+        loss, log_pB, log_det_JG = self.rvkl_loss(z)
+        loss = loss
         # ratio = self.left_side_ratio(z)
 
         return dict(
-            loss=loss,
+            loss=loss.mean(),
+            log_pB=log_pB.mean(),
+            log_det_JG=log_det_JG.mean(),
             # left_side_ratio=ratio
         )
 
