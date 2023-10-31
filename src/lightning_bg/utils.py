@@ -3,6 +3,9 @@ import math
 import mdtraj
 import torch
 
+from FrEIA.utils import force_to
+
+
 # This would be obsolete
 def remove_H_atoms(coordinates, system):
     df = system.mdtraj_topology.to_dataframe()[0]
@@ -28,6 +31,22 @@ class SingleTensorDataset(torch.utils.data.TensorDataset):
 
     def get_tensor(self):
         return self.tensors[0]
+
+    def to(self, *args, **kwargs):
+        force_to(self.q, *args, **kwargs)
+        return super().to(*args, **kwargs)
+
+    def cuda(self, device=None):
+        # Delegate to .to(...) as it moves distributions, too
+        if device is None:
+            device = torch.device("cuda", torch.cuda.current_device())
+        elif isinstance(device, int):
+            device = torch.device("cuda", index=device)
+        return self.to(device)
+
+    def cpu(self):
+        # Delegate to .to(...) as it moves distributions, too
+        return self.to("cpu")
 
 
 class CoordinateDataset(SingleTensorDataset):
@@ -66,4 +85,5 @@ def dataset_setter(coordinates, system, val_split=.1, test_split=.2, seed=42):
 
 
 def tensor_analysis(tensor):
-    print(f"size: {tensor.shape}, {tensor.min():3f} to {tensor.max():3f}, mean: {tensor.mean():3f} +/- {tensor.var().sqrt():3f}")
+    print(
+        f"size: {tensor.shape}, {tensor.min():3f} to {tensor.max():3f}, mean: {tensor.mean():3f} +/- {tensor.var().sqrt():3f}")

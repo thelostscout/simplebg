@@ -7,11 +7,8 @@ network_params: {
   subnet_width: 256,
   batch_size: 1024,
   max_epochs:  200,
-  optimizer: {
-    name: "Adam",
-    lr: 3.e-5,
-    betas: [.99, .9999],
-  },
+  optimizer: "Adam",
+  lr_scheduler: "onecyclelr",
   latent_target_distribution: {
     name: "Normal",
     sigma: 1.,
@@ -24,5 +21,5 @@ training_params: {
 }
 
 trainer_kwargs: {
-  overfit_batches: 1
+#  overfit_batches: 1
 }

@@ -2,8 +2,8 @@
 #SBATCH --partition=single
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=5
-#SBATCH --time=16:00:00
-#SBATCH --mem=16G
+#SBATCH --time=36:00:00
+#SBATCH --mem=5G
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=kortkamp@stud.uni-heidelberg.de
@@ -16,4 +16,3 @@ module load devel/miniconda
 module load devel/cuda
 conda activate lightning_bg
 python src/main.py "$@"
-echo "done"
