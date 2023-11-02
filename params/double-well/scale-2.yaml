@@ -1,0 +1,32 @@
+network_name: "RNVPrvkl"
+
+distribution_params: {
+  means: [[0, 0], [0, 10]],
+  stds: [[1, 1], [1, 1]],
+  weights: [1, 1],
+}
+
+network_params: {
+  inn_depth: 12,
+  subnet_width: 128,
+  batch_size: 1024,
+  max_epochs:  5,
+  lr_scheduler: "onecyclelr",
+  optimizer: "Adam",
+  latent_target_distribution: {
+    name: "Normal",
+    sigma: 1.,
+  },
+  gradient_clip: 10.0,
+}
+
+training_params: {
+  train_split: .7,
+  redo_premodel: False,
+  iterations: 100,
+  scale: .01,
+}
+
+trainer_kwargs: {
+#  overfit_batches: 1
+}
