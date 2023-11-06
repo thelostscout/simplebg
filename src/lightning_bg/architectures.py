@@ -27,7 +27,9 @@ def get_network_by_name(name: str):
 
 class BaseHParams(lt.TrainableHParams):
     inn_depth: int
-    subnet_width: int
+    subnet_max_width: int
+    subnet_depth: int
+    scale: int = 2
     n_dims: int
     latent_target_distribution: dict
 
@@ -86,22 +88,34 @@ class BaseTrainable(lt.Trainable, ABC):
 
 class BaseRNVP(BaseTrainable):
     def configure_inn(self):
-        subnet_width = self.hparams.subnet_width
+        subnet_max_width = self.hparams.subnet_max_width
         inn_depth = self.hparams.inn_depth
         n_dims = self.hparams.n_dims
         inn = Ff.SequenceINN(n_dims)
         inn.append(Fm.ActNorm)
         for k in range(inn_depth):
-            inn.append(Fm.RNVPCouplingBlock, subnet_constructor=partial(self.subnet_constructor, subnet_width))
+            inn.append(
+                Fm.RNVPCouplingBlock,
+                subnet_constructor=partial(self.subnet_constructor, subnet_max_width, subnet_depth, scale)
+            )
         return inn
 
     @staticmethod
-    def subnet_constructor(subnet_width, dims_in, dims_out):
-        block = nn.Sequential(nn.Linear(dims_in, subnet_width), nn.ReLU(),
-                              nn.Linear(subnet_width, subnet_width), nn.ReLU(),
-                              nn.Linear(subnet_width, subnet_width), nn.ReLU(),
-                              nn.Linear(subnet_width, dims_out))
-
+    def subnet_constructor(subnet_max_width, subnet_depth, scale, dims_in, dims_out):
+        assert dims_in == dims_out
+        assert subnet_max_width >= dims_in
+        layers = []
+        for i in range(subnet_depth + 1):
+            if i < subnet_depth / 2:
+                dims_out = dims_in * scale
+            elif i == subnet_depth / 2:
+                dims_out = dims_in
+            else:
+                dims_out = int(dims_in / scale)
+            layers.append(nn.Linear(min(dims_in, subnet_max_width), min(dims_out, subnet_max_width)))
+            if i != subnet_depth():
+                layers.append(nn.ReLU())
+        block = nn.Sequential(*layers)
         block[-1].weight.data.zero_()
         block[-1].bias.data.zero_()
         return block

@@ -3,8 +3,9 @@ network_name: "RNVPfwkl"
 
 
 network_params: {
-  inn_depth: 48,
-  subnet_width: 256,
+  inn_depth: 24,
+  subnet_max_width: 256,
+  subnet_depth: 3,
   batch_size: 1024,
   max_epochs:  20000,
   optimizer: {
