@@ -29,7 +29,7 @@ class BaseHParams(lt.TrainableHParams):
     inn_depth: int
     subnet_max_width: int
     subnet_depth: int
-    scale: int = 2
+    subnet_growth_factor: int = 2
     n_dims: int
     latent_target_distribution: dict
 
@@ -89,32 +89,43 @@ class BaseTrainable(lt.Trainable, ABC):
 class BaseRNVP(BaseTrainable):
     def configure_inn(self):
         subnet_max_width = self.hparams.subnet_max_width
+        subnet_depth = self.hparams.subnet_depth
+        subnet_growth_factor = self.hparams.subnet_growth_factor
         inn_depth = self.hparams.inn_depth
         n_dims = self.hparams.n_dims
         inn = Ff.SequenceINN(n_dims)
+        # normalize inputs
         inn.append(Fm.ActNorm)
         for k in range(inn_depth):
             inn.append(
                 Fm.RNVPCouplingBlock,
-                subnet_constructor=partial(self.subnet_constructor, subnet_max_width, subnet_depth, scale)
+                subnet_constructor=partial(
+                    self.subnet_constructor,
+                    subnet_max_width,
+                    subnet_depth,
+                    subnet_growth_factor
+                )
             )
         return inn
 
     @staticmethod
-    def subnet_constructor(subnet_max_width, subnet_depth, scale, dims_in, dims_out):
-        assert dims_in == dims_out
+    def subnet_constructor(subnet_max_width, subnet_depth, subnet_growth_factor, dims_in, dims_out):
         assert subnet_max_width >= dims_in
+        dims_prev = dims_in
         layers = []
         for i in range(subnet_depth + 1):
             if i < subnet_depth / 2:
-                dims_out = dims_in * scale
+                dims_next = dims_prev * subnet_growth_factor
             elif i == subnet_depth / 2:
-                dims_out = dims_in
+                dims_next = dims_prev
             else:
-                dims_out = int(dims_in / scale)
-            layers.append(nn.Linear(min(dims_in, subnet_max_width), min(dims_out, subnet_max_width)))
-            if i != subnet_depth():
+                dims_next = int(dims_prev / subnet_growth_factor)
+            if i != subnet_depth:
+                layers.append(nn.Linear(min(dims_prev, subnet_max_width), min(dims_next, subnet_max_width)))
                 layers.append(nn.ReLU())
+            else:
+                layers.append(nn.Linear(min(dims_prev, subnet_max_width), dims_out))
+            dims_prev = dims_next
         block = nn.Sequential(*layers)
         block[-1].weight.data.zero_()
         block[-1].bias.data.zero_()
@@ -233,7 +244,14 @@ class RNVPrvkl(BaseRNVPEnergy):
         xG, log_det_JG = self.inn(z, rev=True)
         log_pB = self.pB_log_prob(xG)
         # log_pG = self.q.log_prob(z) - log_det_JG
-        return - log_pB - log_det_JG, log_pB, log_det_JG
+        return - log_pB - log_det_JG
+
+    def mod_forward_kl_loss(self):
+        with torch.no_grad():
+            means = torch.Tensor([[0, 0], [0, 10]]).to(device="cuda")
+            z, log_det_JF = self.inn(means, rev=False)
+            log_likelihood = self.q.log_prob(z) + log_det_JF
+        return log_likelihood[0], log_likelihood[1]
 
     def left_side_ratio(self, z):
         xG = self.inn(z, rev=True)[0]
@@ -242,14 +260,16 @@ class RNVPrvkl(BaseRNVPEnergy):
     # noinspection PyTypeChecker
     def compute_metrics(self, batch, batch_idx) -> dict:
         z = self.q.sample((self.hparams.batch_size,))
-        loss, log_pB, log_det_JG = self.rvkl_loss(z)
-        loss = loss
+        loss = self.rvkl_loss(z)
+        lower_mean, upper_mean = self.mod_forward_kl_loss()
         # ratio = self.left_side_ratio(z)
 
         return dict(
             loss=loss.mean(),
-            log_pB=log_pB.mean(),
-            log_det_JG=log_det_JG.mean(),
+            lower_mean=lower_mean,
+            upper_mean=upper_mean,
+            # log_pB=log_pB.mean(),
+            # log_det_JG=log_det_JG.mean(),
             # left_side_ratio=ratio
         )
 

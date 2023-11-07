@@ -1,24 +1,23 @@
 molecule: "/OppA/Peptides/1b4z"
 network_name: "RNVPfwkl"
 
-
 network_params: {
-  inn_depth: 24,
+  inn_depth: 10,
   subnet_max_width: 2000,
-  subnet_depth: 3,
-  batch_size: 1024,
-  max_epochs:  2000,
-  early_stopping: 20,
+  subnet_depth: 8,
+  batch_size: 1000,
+  max_epochs:  200,
   optimizer: {
     name: "Adam",
     lr: 3.e-5,
   },
-    lr_scheduler: "onecyclelr",
+  lr_scheduler: "onecyclelr",
   latent_target_distribution: {
     name: "Normal",
     sigma: 1.,
   },
-  gradient_clip: 10.0,
+  gradient_clip: 5.0,
+  track_grad_norm: 2,
 }
 
 training_params: {
