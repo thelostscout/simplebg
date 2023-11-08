@@ -6,13 +6,6 @@ import torch
 from FrEIA.utils import force_to
 
 
-# This would be obsolete
-def remove_H_atoms(coordinates, system):
-    df = system.mdtraj_topology.to_dataframe()[0]
-    atom_idx = (df['element'] != "H").astype(int).to_numpy().nonzero()
-    return coordinates[:, atom_idx].squeeze()
-
-
 # TODO: use a premade backbone searcher
 def align_backbone(coordinates, system):
     df = system.mdtraj_topology.to_dataframe()[0]
@@ -58,6 +51,8 @@ class CoordinateDataset(SingleTensorDataset):
         coordinates = align_backbone(coordinates, system)
         coordinate_tensor = torch.Tensor(coordinates.reshape(N, -1))
 
+        self.reference_molecule = coordinates[0]
+
         val_len = int(math.floor(N * val_split))
         test_len = int(math.floor(N * test_split))
         generator = torch.Generator().manual_seed(seed)
@@ -84,6 +79,16 @@ def dataset_setter(coordinates, system, val_split=.1, test_split=.2, seed=42):
     return out
 
 
-def tensor_analysis(tensor):
-    print(
-        f"size: {tensor.shape}, {tensor.min():3f} to {tensor.max():3f}, mean: {tensor.mean():3f} +/- {tensor.var().sqrt():3f}")
+class Alignment:
+    def __init__(self, system, reference_molecule):
+        self.reference_molecule = mdtraj.Trajectory(reference_molecule, system.mdtraj_topology)
+        df = system.mdtraj_topology.to_dataframe()[0]
+        self.atom_idx = (df['element'] != "H").astype(int).to_numpy().nonzero()[0]
+
+    def penalty(self, x: torch.Tensor):
+        with torch.no_grad():
+            x = x.cpu()
+            x = x.reshape(*x.shape[:-1], *self.reference_molecule.xyz.shape[-2:])
+            traj = mdtraj.Trajectory(x, self.reference_molecule.topology)
+            traj = traj.superpose(self.reference_molecule, frame=0, atom_indices=self.atom_idx, parallel=True)
+        return torch.mean((x - traj.xyz) ** 2, dim=1)

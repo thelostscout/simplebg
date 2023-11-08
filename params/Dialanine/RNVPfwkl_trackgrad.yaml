@@ -10,9 +10,10 @@ network_params: {
   max_epochs:  5,
   optimizer: {
     name: "Adam",
-    lr: 3.e-6,
+    lr: 3.e-5,
   },
-  lr_scheduler: "onecyclelr",
+  adjust_lr: False,
+#  lr_scheduler: "onecyclelr",
   latent_target_distribution: {
     name: "Normal",
     sigma: 1.,
@@ -27,5 +28,5 @@ training_params: {
 
 trainer_kwargs: {
 #  overfit_batches: 1,
-  log_every_n_steps: 1,
+#  log_every_n_steps: 1,
 }

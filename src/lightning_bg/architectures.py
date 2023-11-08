@@ -9,6 +9,10 @@ import torch.nn as nn
 from FrEIA.utils import force_to
 from abc import ABC, abstractmethod
 
+from lightning_trainable.hparams import AttributeDict
+
+from lightning_bg.utils import Alignment
+
 
 def get_network_by_name(name: str):
     if name == "RNVPfwkl":
@@ -25,13 +29,46 @@ def get_network_by_name(name: str):
         raise ValueError(f"Unknown network name {name}")
 
 
+def latent_distribution_constructor(n_dims, **kwargs):
+    name = kwargs['name']
+
+    if name == "Normal":
+        sigma = kwargs['sigma']
+        return D.MultivariateNormal(torch.zeros(n_dims), sigma * torch.eye(n_dims))
+    elif name == "Bimodal":
+        sigmas = torch.tensor(kwargs['sigmas'])[:, None] * torch.eye(n_dims)
+        mus = torch.zeros((2, n_dims))
+        mus[0, 0], mus[1, 0] = kwargs['mus']
+        gausses = D.MultivariateNormal(mus, sigmas)
+        weights = D.Categorical(torch.tensor([1, 1]))
+        return D.MixtureSameFamily(weights, gausses)
+    else:
+        raise ValueError(f"Unknown distribution name {name}")
+
+
 class BaseHParams(lt.TrainableHParams):
     inn_depth: int
     subnet_max_width: int
     subnet_depth: int
     subnet_growth_factor: int = 2
     n_dims: int
+    adjust_lr: bool = False
     latent_target_distribution: dict
+
+    @classmethod
+    def validate_parameters(cls, hparams: AttributeDict) -> AttributeDict:
+        hparams = super().validate_parameters(hparams)
+        if hparams.adjust_lr:
+            print("Dividing learning rate by n_dims")
+            hparams.optimizer['lr'] /= hparams.n_dims
+        else:
+            print("Not adjusting learning rate")
+        return hparams
+
+
+class RvklHParams(BaseHParams):
+    is_molecule: bool = True
+    lambda_alignment: float | None = None
 
 
 class BaseTrainable(lt.Trainable, ABC):
@@ -41,29 +78,13 @@ class BaseTrainable(lt.Trainable, ABC):
     def __init__(self, hparams, **kwargs):
         super().__init__(hparams, **kwargs)
         self.inn = self.configure_inn()
-        self.q = self.latent_distribution_constructor(**hparams.latent_target_distribution)
+        self.q = latent_distribution_constructor(hparams.n_dims, **hparams.latent_target_distribution)
 
     @abstractmethod
     def configure_inn(self):
         raise NotImplementedError
 
-    def latent_distribution_constructor(self, **kwargs):
-        n_dims = self.hparams.n_dims
-        name = kwargs['name']
-
-        if name == "Normal":
-            sigma = kwargs['sigma']
-            return D.MultivariateNormal(torch.zeros(n_dims), sigma * torch.eye(n_dims))
-
-        if name == "Bimodal":
-            sigmas = torch.tensor(kwargs['sigmas'])[:, None] * torch.eye(n_dims)
-            mus = torch.zeros((2, n_dims))
-            mus[0, 0], mus[1, 0] = kwargs['mus']
-            gausses = D.MultivariateNormal(mus, sigmas)
-            weights = D.Categorical(torch.tensor([1, 1]))
-            return D.MixtureSameFamily(weights, gausses)
-
-    def generate_samples(self, size):
+    def sample(self, size):
         with torch.no_grad():
             z = self.q.sample(size)
             x = self.inn(z, rev=True)[0]
@@ -88,22 +109,17 @@ class BaseTrainable(lt.Trainable, ABC):
 
 class BaseRNVP(BaseTrainable):
     def configure_inn(self):
-        subnet_max_width = self.hparams.subnet_max_width
-        subnet_depth = self.hparams.subnet_depth
-        subnet_growth_factor = self.hparams.subnet_growth_factor
-        inn_depth = self.hparams.inn_depth
-        n_dims = self.hparams.n_dims
-        inn = Ff.SequenceINN(n_dims)
+        inn = Ff.SequenceINN(self.hparams.n_dims)
         # normalize inputs
         inn.append(Fm.ActNorm)
-        for k in range(inn_depth):
+        for k in range(self.hparams.inn_depth):
             inn.append(
                 Fm.RNVPCouplingBlock,
                 subnet_constructor=partial(
                     self.subnet_constructor,
-                    subnet_max_width,
-                    subnet_depth,
-                    subnet_growth_factor
+                    self.hparams.subnet_max_width,
+                    self.hparams.subnet_depth,
+                    self.hparams.subnet_growth_factor,
                 )
             )
         return inn
@@ -134,6 +150,7 @@ class BaseRNVP(BaseTrainable):
 
 class BaseRNVPEnergy(BaseRNVP):
     needs_energy_function = True
+    needs_alignment = False
 
     def __init__(self, hparams, energy_function, **kwargs):
         super().__init__(hparams, **kwargs)
@@ -239,38 +256,31 @@ class RNVPfrkl(BaseRNVPEnergy):
 
 class RNVPrvkl(BaseRNVPEnergy):
     hparams: BaseHParams
+    needs_alignment = True
+
+    def __init__(self, hparams, energy_function, alignment_penalty: Alignment.penalty, **kwargs):
+        super().__init__(hparams, energy_function, **kwargs)
+        self.is_molecule = self.hparams.is_molecule
+        self.alignment_penalty = alignment_penalty
 
     def rvkl_loss(self, z):
         xG, log_det_JG = self.inn(z, rev=True)
         log_pB = self.pB_log_prob(xG)
-        # log_pG = self.q.log_prob(z) - log_det_JG
-        return - log_pB - log_det_JG
+        if self.is_molecule:
+            alignment_penalty = self.alignment_penalty(xG) * self.hparams.lambda_alignment
+        else:
+            alignment_penalty = 0
 
-    def mod_forward_kl_loss(self):
-        with torch.no_grad():
-            means = torch.Tensor([[0, 0], [0, 10]]).to(device="cuda")
-            z, log_det_JF = self.inn(means, rev=False)
-            log_likelihood = self.q.log_prob(z) + log_det_JF
-        return log_likelihood[0], log_likelihood[1]
+        return - log_pB - log_det_JG + alignment_penalty
 
-    def left_side_ratio(self, z):
-        xG = self.inn(z, rev=True)[0]
-        return (xG[:, 0] < 5).float().mean()
-
-    # noinspection PyTypeChecker
     def compute_metrics(self, batch, batch_idx) -> dict:
+        # noinspection PyTypeChecker
         z = self.q.sample((self.hparams.batch_size,))
         loss = self.rvkl_loss(z)
-        lower_mean, upper_mean = self.mod_forward_kl_loss()
-        # ratio = self.left_side_ratio(z)
 
         return dict(
             loss=loss.mean(),
-            lower_mean=lower_mean,
-            upper_mean=upper_mean,
-            # log_pB=log_pB.mean(),
-            # log_det_JG=log_det_JG.mean(),
-            # left_side_ratio=ratio
+            # alignment_penalty=aligment_penalty.mean(),
         )
 
 

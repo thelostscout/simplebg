@@ -9,6 +9,8 @@ import yaml
 from lightning_bg.architectures import *
 from lightning_bg.utils import dataset_setter
 
+torch.set_float32_matmul_precision('high')
+
 
 def run_experiment(experiment_params, experiment_param_name, experiment_data_path):
     # set log path
@@ -21,7 +23,8 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
         ala_data = bgmol.datasets.Ala2TSF300(download=not is_data_here, read=True, root=molecule_path)
         # define system & energy model
         system = ala_data.system
-        energy_model = system.reinitialize_energy_model(temperature=300., n_workers=1)
+        system.reinitialize_energy_model(temperature=300., n_workers=1)
+        energy_model = system.energy_model
         coordinates = ala_data.coordinates
     else:
         # read the top.pdb
@@ -34,7 +37,8 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
 
         # define system & energy model
         system = peptide(short=False, n_atoms=n_atoms, n_res=n_res, filepath=molecule_path)
-        energy_model = system.reinitialize_energy_model(temperature=300., n_workers=1)
+        system.reinitialize_energy_model(temperature=300., n_workers=1)
+        energy_model = system.energy_model
 
         # read coordinates
         traj = mdtraj.load_hdf5(molecule_path + "/traj.h5")
@@ -46,7 +50,10 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
 
     # load model class and corresponding param class
     ModelClass = get_network_by_name(experiment_params['network_name'])
-    ParamClass = BaseHParams
+    if "rvkl" in experiment_params['network_name'].lower():
+        ParamClass = RvklHParams
+    else:
+        ParamClass = BaseHParams
     hparams = ParamClass(**experiment_params['network_params'])
 
     # prepare the dataloaders
@@ -57,9 +64,15 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
     print(f"{len(train_data)} training data, {len(val_data)} validation data, {len(test_data)} test data.")
     # create model
     if ModelClass.needs_energy_function:
-        model = ModelClass(
-            hparams, energy_model.energy, train_data=train_data, val_data=val_data
-        )
+        if ModelClass.needs_alignment:
+            alignment = Alignment(system, train_data.reference_molecule)
+            model = ModelClass(
+                hparams, energy_model.energy, alignment.penalty, train_data=train_data, val_data=val_data
+            )
+        else:
+            model = ModelClass(
+                hparams, energy_model.energy, train_data=train_data, val_data=val_data
+            )
     else:
         model = ModelClass(
             hparams, train_data=train_data, val_data=val_data
@@ -67,8 +80,9 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
     # load model state from previous experiment
     load_from_checkpoint = experiment_params.get('load_from_checkpoint', None)
     if load_from_checkpoint is not None:
-        print(f"loading state_dict from data/lightning_logs/{load_from_checkpoint}/checkpoints/last.ckpt")
-        checkpoint = torch.load(experiment_data_path + f"/lightning_logs/{load_from_checkpoint}/checkpoints/last.ckpt")
+        checkpoint_path = os.path.join(experiment_data_path, "lightning_logs", load_from_checkpoint.lstrip("/"))
+        print(f"loading state_dict from {checkpoint_path}", os.path.exists(checkpoint_path))
+        checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint['state_dict'])
     if "OppA" in experiment_param_name:  # TODO: this is ugly. find smth better
         i = experiment_param_name.rfind("/")
