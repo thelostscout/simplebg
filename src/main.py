@@ -11,13 +11,32 @@ from lightning_bg.utils import dataset_setter
 
 torch.set_float32_matmul_precision('high')
 
+if __name__ == "__main__":
+    # read yaml param file
+    param_path = sys.argv[1]
+    param_name = os.path.splitext(os.path.basename(param_path))[0]
+    with open(param_path) as f:
+        params = yaml.load(f, yaml.FullLoader)  # load the parameters
 
-def run_experiment(experiment_params, experiment_param_name, experiment_data_path):
+    # read progress bar flag
+    if "--disable_progress_bar" in sys.argv:
+        params['trainer_kwargs']['enable_progress_bar'] = False
+
+    # create a default datapath if none is given
+    data_path = params.get("data_path", None)
+    if not data_path:
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        data_path = os.path.realpath(file_dir + "/../data/") + "/"
+    else:
+        data_path = os.path.expanduser(data_path)
+        print("loading data path from yaml file: ", data_path)
+        data_path = os.path.realpath(data_path) + "/"
+
     # set log path
-    lightning_logs = os.path.join(experiment_data_path, "lightning_logs", experiment_params['molecule'].lstrip("/"))
+    lightning_logs = os.path.join(data_path, "lightning_logs", params['molecule'].lstrip("/"))
     # import data
-    molecule_path = os.path.join(experiment_data_path, "Molecules", params['molecule'].lstrip("/"))
-    if experiment_params['molecule'] == "Dialanine":
+    molecule_path = os.path.join(data_path, "Molecules", params['molecule'].lstrip("/"))
+    if params['molecule'] == "Dialanine":
         # import alanine data
         is_data_here = os.path.exists(molecule_path + "/Ala2TSF300.npy")
         ala_data = bgmol.datasets.Ala2TSF300(download=not is_data_here, read=True, root=molecule_path)
@@ -46,18 +65,21 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
         assert coordinates.shape[-2] == n_atoms, (f"pdb file ({n_atoms}) atoms does not match the "
                                                   f"data ({coordinates.shape[-2]}).")
     # determine n_dims
-    experiment_params['network_params']['n_dims'] = len(coordinates[0].flat)
+    params['network_params']['n_dims'] = len(coordinates[0].flat)
+    # adjust learning rate
+    try:
+        params['network_params']['optimizer']['lr'] /= params['network_params']['n_dims']
+        print(f"Dividing learning rate by n_dims. New lr: {params['network_params']['optimizer']['lr']}.")
+    except KeyError:
+        print("No learning rate found in optimizer dict. Not adjusting learning rate.")
 
     # load model class and corresponding param class
-    ModelClass = get_network_by_name(experiment_params['network_name'])
-    if "rvkl" in experiment_params['network_name'].lower():
-        ParamClass = RvklHParams
-    else:
-        ParamClass = BaseHParams
-    hparams = ParamClass(**experiment_params['network_params'])
+    ModelClass = get_network_by_name(params['network_name'])
+    ParamClass = ModelClass.hparams_type
+    hparams = ParamClass(**params['network_params'])
 
     # prepare the dataloaders
-    train_split = experiment_params['training_params']['train_split']
+    train_split = params['training_params']['train_split']
     train_data, val_data, test_data = dataset_setter(
         coordinates, system, val_split=(.8 - train_split), test_split=.2, seed=42
     )
@@ -78,40 +100,16 @@ def run_experiment(experiment_params, experiment_param_name, experiment_data_pat
             hparams, train_data=train_data, val_data=val_data
         )
     # load model state from previous experiment
-    load_from_checkpoint = experiment_params.get('load_from_checkpoint', None)
+    load_from_checkpoint = params.get('load_from_checkpoint', None)
     if load_from_checkpoint is not None:
-        checkpoint_path = os.path.join(experiment_data_path, "lightning_logs", load_from_checkpoint.lstrip("/"))
+        checkpoint_path = os.path.join(data_path, "lightning_logs", load_from_checkpoint.lstrip("/"))
         print(f"loading state_dict from {checkpoint_path}", os.path.exists(checkpoint_path))
         checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint['state_dict'])
-    if "OppA" in experiment_param_name:  # TODO: this is ugly. find smth better
-        i = experiment_param_name.rfind("/")
-        experiment_param_name = experiment_param_name[i+1:]
 
     # fit the model
     model.fit(
-        trainer_kwargs=experiment_params['trainer_kwargs'],
-        logger_kwargs=dict(save_dir=lightning_logs, name=experiment_param_name)
+        trainer_kwargs=params['trainer_kwargs'],
+        logger_kwargs=dict(save_dir=lightning_logs, name=param_name)
     )
-    pass
-
-
-if __name__ == "__main__":
-    # read yaml param file
-    param_path = sys.argv[1]
-    param_name = param_path[:-5]
-    with open(param_path) as f:
-        params = yaml.load(f, yaml.FullLoader)  # load the parameters
-
-    # create a default datapath if none is given
-    data_path = params.get("data_path", None)
-    if not data_path:
-        file_dir = os.path.dirname(os.path.realpath(__file__))
-        data_path = os.path.realpath(file_dir + "/../data/") + "/"
-    else:
-        data_path = os.path.expanduser(data_path)
-        print("loading data path from yaml file: ", data_path)
-        data_path = os.path.realpath(data_path) + "/"
-
-    run_experiment(params, param_name, data_path)
     print("done")

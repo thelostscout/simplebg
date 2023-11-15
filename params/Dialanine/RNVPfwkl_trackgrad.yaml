@@ -12,7 +12,6 @@ network_params: {
     name: "Adam",
     lr: 3.e-5,
   },
-  adjust_lr: False,
 #  lr_scheduler: "onecyclelr",
   latent_target_distribution: {
     name: "Normal",

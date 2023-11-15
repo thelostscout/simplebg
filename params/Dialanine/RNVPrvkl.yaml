@@ -1,20 +1,19 @@
 molecule: "Dialanine"
 network_name: "RNVPrvkl"
-load_from_checkpoint: "Dialanine/params/Dialanine/RNVPfwkl/version_1/checkpoints/last.ckpt"
+load_from_checkpoint: "Dialanine/RNVPfwkl/version_1/checkpoints/epoch=849-step=595000.ckpt"
 
 
 network_params: {
   inn_depth: 10,
-  subnet_max_width: 256,
+  subnet_max_width: 2000,
   subnet_depth: 8,
   batch_size: 1000,
   max_epochs:  20,
   optimizer: {
     name: "Adam",
-    lr: 1.e-4,
+    lr: 1.e-3,
   },
-  adjust_lr: True,
-  lr_scheduler: "onecyclelr",
+#  lr_scheduler: "onecyclelr",
   latent_target_distribution: {
     name: "Normal",
     sigma: 1.,
