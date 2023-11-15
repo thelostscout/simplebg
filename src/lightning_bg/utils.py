@@ -91,4 +91,4 @@ class Alignment:
             x = x.reshape(*x.shape[:-1], *self.reference_molecule.xyz.shape[-2:])
             traj = mdtraj.Trajectory(x, self.reference_molecule.topology)
             traj = traj.superpose(self.reference_molecule, frame=0, atom_indices=self.atom_idx, parallel=True)
-        return torch.mean((x - traj.xyz) ** 2, dim=1)
+        return torch.mean((x - traj.xyz).reshape(*x.shape[:-2], -1) ** 2, dim=-1)

@@ -23,6 +23,8 @@ def get_network_by_name(name: str):
         return RNVPvar
     elif name == "RNVPrvkl":
         return RNVPrvkl
+    elif name == "RNVPrvklLatent":
+        return RNVPrvklLatent
     elif name == "RQSfwkl":
         return RQSfwkl
     else:
@@ -46,29 +48,50 @@ def latent_distribution_constructor(n_dims, **kwargs):
         raise ValueError(f"Unknown distribution name {name}")
 
 
+def exponential_subnet_constructor(subnet_max_width, subnet_depth, subnet_growth_factor, dims_in, dims_out):
+    assert subnet_max_width >= dims_in
+    dims_prev = dims_in
+    layers = []
+    for i in range(subnet_depth + 1):
+        if i < subnet_depth / 2:
+            dims_next = dims_prev * subnet_growth_factor
+        elif i == subnet_depth / 2:
+            dims_next = dims_prev
+        else:
+            dims_next = int(dims_prev / subnet_growth_factor)
+        if i != subnet_depth:
+            layers.append(nn.Linear(min(dims_prev, subnet_max_width), min(dims_next, subnet_max_width)))
+            layers.append(nn.ReLU())
+        else:
+            layers.append(nn.Linear(min(dims_prev, subnet_max_width), dims_out))
+        dims_prev = dims_next
+    block = nn.Sequential(*layers)
+    block[-1].weight.data.zero_()
+    block[-1].bias.data.zero_()
+    return block
+
+
 class BaseHParams(lt.TrainableHParams):
     inn_depth: int
     subnet_max_width: int
     subnet_depth: int
     subnet_growth_factor: int = 2
     n_dims: int
-    adjust_lr: bool = False
     latent_target_distribution: dict
-
-    @classmethod
-    def validate_parameters(cls, hparams: AttributeDict) -> AttributeDict:
-        hparams = super().validate_parameters(hparams)
-        if hparams.adjust_lr:
-            print("Dividing learning rate by n_dims")
-            hparams.optimizer['lr'] /= hparams.n_dims
-        else:
-            print("Not adjusting learning rate")
-        return hparams
 
 
 class RvklHParams(BaseHParams):
     is_molecule: bool = True
     lambda_alignment: float | None = None
+
+
+class RvklLatentHParams(RvklHParams):
+    latent_network_params: BaseHParams
+
+    @classmethod
+    def validate_parameters(cls, hparams: AttributeDict) -> AttributeDict:
+        hparams.latent_network_params.n_dims = hparams.n_dims
+        return super().validate_parameters(hparams)
 
 
 class BaseTrainable(lt.Trainable, ABC):
@@ -78,7 +101,10 @@ class BaseTrainable(lt.Trainable, ABC):
     def __init__(self, hparams, **kwargs):
         super().__init__(hparams, **kwargs)
         self.inn = self.configure_inn()
-        self.q = latent_distribution_constructor(hparams.n_dims, **hparams.latent_target_distribution)
+        self.q = latent_distribution_constructor(self.hparams.n_dims, **self.hparams.latent_target_distribution)
+
+        print(self.hparams.max_epochs)
+        print(self.hparams.optimizer)
 
     @abstractmethod
     def configure_inn(self):
@@ -90,8 +116,17 @@ class BaseTrainable(lt.Trainable, ABC):
             x = self.inn(z, rev=True)[0]
         return x
 
+    def log_prob(self, x):
+        z, log_det_JF = self.inn(x)
+        return self.q.log_prob(z) + log_det_JF
+
     def to(self, *args, **kwargs):
-        force_to(self.q, *args, **kwargs)
+        if isinstance(self.q, TrainableDistribution):
+            self.q.model.to(*args, **kwargs)
+        elif isinstance(self.q, D.Distribution):
+            force_to(self.q, *args, **kwargs)
+        else:
+            raise ValueError(f"Unknown distribution type {type(self.q)} for latent distribution.")
         return super().to(*args, **kwargs)
 
     def cuda(self, device=None):
@@ -107,45 +142,35 @@ class BaseTrainable(lt.Trainable, ABC):
         return self.to("cpu")
 
 
+class TrainableDistribution(D.Distribution):
+    def __init__(self, model: BaseTrainable):
+        self.model = model
+        super().__init__(validate_args=False)
+
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
+        return self.model.log_prob(value)
+
+    def sample(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
+        return self.model.sample(sample_shape)
+
+
 class BaseRNVP(BaseTrainable):
     def configure_inn(self):
         inn = Ff.SequenceINN(self.hparams.n_dims)
         # normalize inputs
         inn.append(Fm.ActNorm)
+        # add coupling blocks
         for k in range(self.hparams.inn_depth):
             inn.append(
                 Fm.RNVPCouplingBlock,
                 subnet_constructor=partial(
-                    self.subnet_constructor,
+                    exponential_subnet_constructor,
                     self.hparams.subnet_max_width,
                     self.hparams.subnet_depth,
                     self.hparams.subnet_growth_factor,
                 )
             )
         return inn
-
-    @staticmethod
-    def subnet_constructor(subnet_max_width, subnet_depth, subnet_growth_factor, dims_in, dims_out):
-        assert subnet_max_width >= dims_in
-        dims_prev = dims_in
-        layers = []
-        for i in range(subnet_depth + 1):
-            if i < subnet_depth / 2:
-                dims_next = dims_prev * subnet_growth_factor
-            elif i == subnet_depth / 2:
-                dims_next = dims_prev
-            else:
-                dims_next = int(dims_prev / subnet_growth_factor)
-            if i != subnet_depth:
-                layers.append(nn.Linear(min(dims_prev, subnet_max_width), min(dims_next, subnet_max_width)))
-                layers.append(nn.ReLU())
-            else:
-                layers.append(nn.Linear(min(dims_prev, subnet_max_width), dims_out))
-            dims_prev = dims_next
-        block = nn.Sequential(*layers)
-        block[-1].weight.data.zero_()
-        block[-1].bias.data.zero_()
-        return block
 
 
 class BaseRNVPEnergy(BaseRNVP):
@@ -255,7 +280,7 @@ class RNVPfrkl(BaseRNVPEnergy):
 
 
 class RNVPrvkl(BaseRNVPEnergy):
-    hparams: BaseHParams
+    hparams: RvklHParams
     needs_alignment = True
 
     def __init__(self, hparams, energy_function, alignment_penalty: Alignment.penalty, **kwargs):
@@ -268,6 +293,7 @@ class RNVPrvkl(BaseRNVPEnergy):
         log_pB = self.pB_log_prob(xG)
         if self.is_molecule:
             alignment_penalty = self.alignment_penalty(xG) * self.hparams.lambda_alignment
+            alignment_penalty = alignment_penalty.to(self.device)
         else:
             alignment_penalty = 0
 
@@ -282,6 +308,39 @@ class RNVPrvkl(BaseRNVPEnergy):
             loss=loss.mean(),
             # alignment_penalty=aligment_penalty.mean(),
         )
+
+
+class RNVPrvklLatent(RNVPrvkl):
+    hparams: RvklLatentHParams
+
+    def __init__(self, hparams, energy_function, alignment_penalty: Alignment.penalty, **kwargs):
+        super().__init__(hparams, energy_function, alignment_penalty, **kwargs)
+        model = RNVPfwkl(hparams.latent_network_params, **kwargs)
+        self.q = TrainableDistribution(model)
+
+    def fit(self, logger_kwargs: dict = None, trainer_kwargs: dict = None, fit_kwargs: dict = None) -> dict:
+        # set latent name in logger
+        if logger_kwargs is not None:
+            latent_logger_kwargs = logger_kwargs.copy()
+        else:
+            latent_logger_kwargs = dict()
+        latent_logger_kwargs["sub_dir"] = "latent"
+        # train latent network
+        # for p in self.inn.parameters():
+        #     p.requires_grad = False
+        # self.inn.eval()
+        # for pq in self.q.parameters():
+        #     pq.requires_grad = True
+        # self.q.train()
+        # self.q.fit(latent_logger_kwargs, trainer_kwargs, fit_kwargs)
+        # for pq in self.q.parameters():
+        #     pq.requires_grad = False
+        # self.q.eval()
+        # for p in self.inn.parameters():
+        #     p.requires_grad = True
+        # self.inn.train()
+        self.q.model.fit(latent_logger_kwargs, trainer_kwargs, fit_kwargs)
+        return super().fit(logger_kwargs, trainer_kwargs, fit_kwargs)
 
 
 class BaseRQS(BaseTrainable):
