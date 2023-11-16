@@ -39,6 +39,7 @@ if __name__ == "__main__":
     if params['molecule'] == "Dialanine":
         # import alanine data
         is_data_here = os.path.exists(molecule_path + "/Ala2TSF300.npy")
+        print(f"Is data here? {is_data_here}, molecule path: {molecule_path}")
         ala_data = bgmol.datasets.Ala2TSF300(download=not is_data_here, read=True, root=molecule_path)
         # define system & energy model
         system = ala_data.system

@@ -31,7 +31,8 @@ class ShowTrajSimple(ipw.VBox):
 class ShowTraj(ShowTrajSimple):
     def __init__(self, samples, system, **kwargs):
         traj = self.create_traj(samples, system)
-        energies = system.reinitialize_energy_model(temperature=300., n_workers=1).energy(samples)
+        system.reinitialize_energy_model(temperature=300., n_workers=1)
+        energies = system.energy_model.energy(samples)
 
         super().__init__(traj, energies, **kwargs)
 

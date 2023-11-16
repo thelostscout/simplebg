@@ -1,4 +1,6 @@
 from functools import partial
+import os
+from typing import Optional
 
 import FrEIA.framework as Ff
 import FrEIA.modules as Fm
@@ -11,7 +13,7 @@ from abc import ABC, abstractmethod
 
 from lightning_trainable.hparams import AttributeDict
 
-from lightning_bg.utils import Alignment
+from .utils import Alignment
 
 
 def get_network_by_name(name: str):
@@ -280,7 +282,7 @@ class RNVPrvkl(BaseRNVPEnergy):
     hparams: RvklHParams
     needs_alignment = True
 
-    def __init__(self, hparams, energy_function, alignment_penalty: Alignment.penalty, **kwargs):
+    def __init__(self, hparams, energy_function, alignment_penalty: Optional[Alignment.penalty], **kwargs):
         super().__init__(hparams, energy_function, **kwargs)
         self.is_molecule = self.hparams.is_molecule
         self.alignment_penalty = alignment_penalty
@@ -294,16 +296,18 @@ class RNVPrvkl(BaseRNVPEnergy):
         else:
             alignment_penalty = 0
 
-        return - log_pB - log_det_JG + alignment_penalty
+        return - log_pB - log_det_JG + alignment_penalty, log_pB, log_det_JG, alignment_penalty
 
     def compute_metrics(self, batch, batch_idx) -> dict:
         # noinspection PyTypeChecker
         z = self.q.sample((self.hparams.batch_size,))
-        loss = self.rvkl_loss(z)
+        loss, log_pB, log_det_JG, alignment_penalty = self.rvkl_loss(z)
 
         return dict(
             loss=loss.mean(),
-            # alignment_penalty=aligment_penalty.mean(),
+            log_pB=log_pB.mean(),
+            log_det_JG=log_det_JG.mean(),
+            alignment_penalty=alignment_penalty.mean(),
         )
 
 
@@ -322,22 +326,24 @@ class RNVPrvklLatent(RNVPrvkl):
         else:
             latent_logger_kwargs = dict()
         latent_logger_kwargs["sub_dir"] = "latent"
-        # train latent network
-        # for p in self.inn.parameters():
-        #     p.requires_grad = False
-        # self.inn.eval()
-        # for pq in self.q.parameters():
-        #     pq.requires_grad = True
-        # self.q.train()
-        # self.q.fit(latent_logger_kwargs, trainer_kwargs, fit_kwargs)
-        # for pq in self.q.parameters():
-        #     pq.requires_grad = False
-        # self.q.eval()
-        # for p in self.inn.parameters():
-        #     p.requires_grad = True
-        # self.inn.train()
+        # make sure that version number is the same accross latent and main training
+        if logger_kwargs.get("version", None) is None:
+            version_number = self.find_next_version(logger_kwargs["save_dir"], logger_kwargs["name"])
+            latent_logger_kwargs["version"] = f"version_{version_number}"
+            logger_kwargs["version"] = f"version_{version_number}"
         self.q.model.fit(latent_logger_kwargs, trainer_kwargs, fit_kwargs)
         return super().fit(logger_kwargs, trainer_kwargs, fit_kwargs)
+
+    @staticmethod
+    def find_next_version(lightning_logs, param_name):
+        dir_path = os.path.join(lightning_logs, param_name)
+        dirs = os.listdir(dir_path)
+        dirs_with_version = [f for f in dirs if f.startswith("version_")]
+        if not dirs_with_version:
+            return 0
+        else:
+            versions = [int(f.split("_")[1]) for f in dirs_with_version]
+            return max(versions) + 1
 
 
 class BaseRQS(BaseTrainable):
