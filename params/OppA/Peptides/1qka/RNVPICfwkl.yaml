@@ -1,14 +1,13 @@
-molecule: "Dialanine"
-network_name: "RNVPrvkl"
-load_from_checkpoint: "Dialanine/RNVPfwkl/version_1/checkpoints/epoch=849-step=595000.ckpt"
+molecule: "OppA/Peptides/1qka"
+network_name: "RNVPICfwkl"
 
 
 network_params: {
   inn_depth: 10,
-  subnet_max_width: 2000,
+  subnet_max_width: 256,
   subnet_depth: 8,
   batch_size: 1000,
-  max_epochs:  20,
+  max_epochs:  20000,
   optimizer: {
     name: "Adam",
     lr: 1.e-3,
@@ -18,7 +17,6 @@ network_params: {
     name: "Normal",
     sigma: 1.,
   },
-  lambda_alignment: 10.,
   gradient_clip: 5.0,
 }
 
@@ -27,5 +25,6 @@ training_params: {
 }
 
 trainer_kwargs: {
-#  overfit_batches: 1
+#  overfit_batches: 1,
+#  log_every_n_steps: 1,
 }

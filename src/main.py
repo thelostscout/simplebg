@@ -1,4 +1,3 @@
-import os
 import sys
 
 import bgmol
@@ -6,7 +5,7 @@ from bgmol.systems.peptide import peptide
 import mdtraj
 import yaml
 
-from lightning_bg.architectures import *
+from lightning_bg.models import *
 from lightning_bg.utils import dataset_setter
 
 torch.set_float32_matmul_precision('high')
@@ -36,7 +35,7 @@ if __name__ == "__main__":
     lightning_logs = os.path.join(data_path, "lightning_logs", params['molecule'].lstrip("/"))
     # import data
     molecule_path = os.path.join(data_path, "Molecules", params['molecule'].lstrip("/"))
-    if params['molecule'] == "Dialanine":
+    if params['molecule'] == "alanine_dipeptide":
         # import alanine data
         is_data_here = os.path.exists(molecule_path + "/Ala2TSF300.npy")
         print(f"Is data here? {is_data_here}, molecule path: {molecule_path}")
@@ -88,7 +87,7 @@ if __name__ == "__main__":
     # create model
     if ModelClass.needs_energy_function:
         if ModelClass.needs_alignment:
-            alignment = Alignment(system, train_data.reference_molecule)
+            alignment = AlignmentIC(system)
             model = ModelClass(
                 hparams, energy_model.energy, alignment.penalty, train_data=train_data, val_data=val_data
             )
@@ -96,6 +95,10 @@ if __name__ == "__main__":
             model = ModelClass(
                 hparams, energy_model.energy, train_data=train_data, val_data=val_data
             )
+    elif ModelClass.needs_system:
+        model = ModelClass(
+            hparams, system, train_data=train_data, val_data=val_data
+        )
     else:
         model = ModelClass(
             hparams, train_data=train_data, val_data=val_data

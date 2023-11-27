@@ -1,4 +1,4 @@
-from lightning_bg.architectures import *
+from lightning_bg.models import *
 from lightning_bg.utils import SingleTensorDataset
 import torch
 import torch.distributions as D
@@ -82,9 +82,12 @@ if __name__ == "__main__":
     # read model and parameter class from params
     ModelClass = get_network_by_name(params['network_name'])
     PreModelClass = get_network_by_name("RNVPfwkl")
-    ParamClass = BaseHParams
+    PreParamClass = PreModelClass.hparams_type
+    ParamClass = ModelClass.hparams_type
     hparams = ParamClass(**params['network_params'])
-    prehparams = ParamClass(**params['network_params'])
+    hparams.is_molecule = False
+    print(hparams)
+    prehparams = PreParamClass(**params['network_params'])
     prehparams.early_stopping = dict(monitor='auto', patience=5)
     prehparams.max_epochs = 10
 
@@ -99,7 +102,7 @@ if __name__ == "__main__":
     # train with fwkl to get optimal solution
     premodel_path = os.path.join(data_path, "premodels", param_name)
     redo_premodel = params['training_params'].get('redo_premodel', False)
-    print(os.path.exists(premodel_path), premodel_path)
+    print("premodel path exists: ", os.path.exists(premodel_path), premodel_path)
     if (not os.path.exists(premodel_path)) or redo_premodel:
         # train the modelv
         premodel = PreModelClass(prehparams, train_data=train_data, val_data=val_data)
@@ -120,12 +123,15 @@ if __name__ == "__main__":
     for i in range(params['training_params']['iterations']):
         # create a new model
         model = ModelClass(hparams, train_data=train_data, val_data=val_data,
-                           energy_function=lambda x: - GMMcuda.log_prob(x))
+                           energy_function=lambda x: - GMMcuda.log_prob(x), alignment_penalty=0)
         model = remove_logger(model)
         # load perturbed state dict
         perturbed_state_dict = perturb_state_dict(state_dict, params['training_params']['scale'])
         model.load_state_dict(perturbed_state_dict)
         # train model and log results
-        results.append(model.fit(trainer_kwargs=dict(enable_progress_bar=False)))
+        try:
+            results.append(model.fit(trainer_kwargs=dict(enable_progress_bar=False)))
+        except ValueError:
+            print("ValueError in iteration", i)
     df = pd.DataFrame(results)
     df.to_csv(os.path.join(data_path, param_name + ".csv"))

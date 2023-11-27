@@ -1,12 +1,14 @@
-molecule: "/OppA/Peptides/1qka"
-network_name: "RNVPfwkl"
+molecule: "alanine_dipeptide"
+network_name: "RNVPrvkl"
+load_from_checkpoint: "alanine_dipeptide/RNVPfwkl/version_10/checkpoints/last.ckpt"
+
 
 network_params: {
   inn_depth: 10,
-  subnet_max_width: 2000,
-  subnet_depth: 10,
+  subnet_max_width: 256,
+  subnet_depth: 8,
   batch_size: 1000,
-  max_epochs:  100000,
+  max_epochs:  25,
   optimizer: {
     name: "Adam",
     lr: 1.e-3,
@@ -16,7 +18,8 @@ network_params: {
     name: "Normal",
     sigma: 1.,
   },
-  gradient_clip: 1.0,
+  lambda_alignment: 10.,
+  gradient_clip: 5.0,
 }
 
 training_params: {

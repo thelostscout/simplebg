@@ -1,11 +1,15 @@
 import ipywidgets as ipw
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import mdtraj
 import nglview
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 from bgmol.systems.ala2 import compute_phi_psi
-import matplotlib as mpl
+
+from lightning_bg.models import get_network_by_name
+from lightning_bg.utils import dataset_setter
+from .utils import load_data, load_model_kwargs
 
 
 class ShowTrajSimple(ipw.VBox):
@@ -50,14 +54,31 @@ class Evaluator:
         self.q = model.q
         self._all_funcs = [self.energy_plot, self.ramachandran_plot]
 
-    def energy_plot(self, rg=None, **figkwargs):
-        if rg is None:
-            rg = [-50, 100]
-        return energy_plot(self.val_data, self.system.energy_model.energy, self.inn, self.q, rg,
+    @classmethod
+    def load_from_checkpoint(cls, checkpoint_path, data_path, model_class):
+        print(checkpoint_path, data_path, model_class)
+        coordinates, system = load_data(data_path)
+        train_split = .7
+        train_data, val_data, test_data = dataset_setter(coordinates, system, val_split=(.8 - train_split),
+                                                         test_split=.2, seed=42)
+        ModelClass = get_network_by_name(model_class)
+        ParamClass = ModelClass.hparams_type
+        hparams = torch.load(checkpoint_path.rstrip("/") + "/checkpoints/last.ckpt")['hyper_parameters']
+        model_kwargs = load_model_kwargs(ModelClass, train_data, val_data, system)
+        model = ModelClass.load_from_checkpoint(checkpoint_path.rstrip("/") + "/checkpoints/last.ckpt",
+                                                hparams=hparams,
+                                                **model_kwargs
+                                                )
+        return cls(model, system)
+
+    def energy_plot(self, rg=None, ax=None, **figkwargs):
+        # if rg is None:
+        #     rg = [-50, 100]
+        return energy_plot(self.val_data, self.system.energy_model.energy, self.inn, self.q, rg, ax=ax,
                            **figkwargs)
 
-    def ramachandran_plot(self, **figkwargs):
-        return ramachandran_plot(self.val_data, self.system.mdtraj_topology, self.inn, self.q,
+    def ramachandran_plot(self, axs=None, **figkwargs):
+        return ramachandran_plot(self.val_data, self.system.mdtraj_topology, self.inn, self.q, axs=axs,
                                  **figkwargs)
 
     def plot_all(self, **figkwargs):
@@ -68,12 +89,28 @@ class Evaluator:
             outputs.append(out)
         return outputs
 
+    def plot_energy_and_ramachandran(self, save_loc, rg, **figkwargs):
+        fig, [ax1, ax2, ax3] = plt.subplots(1, 3, **figkwargs)
+        self.energy_plot(rg=rg, ax=ax1)
+        self.ramachandran_plot(axs=[ax2, ax3])
+        fig.savefig(save_loc, bbox_inches='tight')
+        pass
 
-def energy_plot_simple(val_energies, sample_energies, rg, **figkwargs):
-    fig = plt.figure(**figkwargs)
-    ax = plt.gca()
-    ax.hist(val_energies.cpu().detach().numpy(), bins=200, histtype='step', range=rg, label="target")
-    ax.hist(sample_energies.cpu().detach().numpy(), bins=200, histtype='step', range=rg, label="generated")
+    def plot_energy(self, save_loc, rg, **figkwargs):
+        fig, ax1 = plt.subplots(1, 1, **figkwargs)
+        self.energy_plot(rg=rg, ax=ax1)
+        fig.savefig(save_loc, bbox_inches='tight')
+        pass
+
+
+def energy_plot_simple(val_energies, sample_energies, rg, ax=None, **figkwargs):
+    if ax is None:
+        fig = plt.figure(**figkwargs)
+        ax = plt.gca()
+    else:
+        fig = ax.figure
+    ax.hist(val_energies.cpu().detach().numpy(), bins=200, histtype='step', range=rg, label=r"$p^*$")
+    ax.hist(sample_energies.cpu().detach().numpy(), bins=200, histtype='step', range=rg, label=r"$\hat p$")
     ax.set_yscale('log')
     ax.set_ylabel("# samples")
     ax.set_xlabel(r"Energy [$k_B T$]")
@@ -81,7 +118,7 @@ def energy_plot_simple(val_energies, sample_energies, rg, **figkwargs):
     return fig, ax
 
 
-def energy_plot(val_dataset, energy_function, INN, latent_target_distribution, rg, **figkwargs):
+def energy_plot(val_dataset, energy_function, INN, latent_target_distribution, rg, ax=None, **figkwargs):
     with torch.no_grad():
         n_samples = len(val_dataset)
         z = latent_target_distribution.sample((n_samples,))
@@ -89,7 +126,7 @@ def energy_plot(val_dataset, energy_function, INN, latent_target_distribution, r
         energies = energy_function(x)
         val_tensor = val_dataset.get_tensor()
         val_energies = energy_function(val_tensor)
-    fig, ax = energy_plot_simple(val_energies, energies, rg, **figkwargs)
+    fig, ax = energy_plot_simple(val_energies, energies, rg, ax, **figkwargs)
     return fig, ax
 
 
@@ -98,18 +135,23 @@ def energy_plot(val_dataset, energy_function, INN, latent_target_distribution, r
 def plot_phi_psi(ax, phi_psi, bins=100):
     ax.set_xlabel(r"$\phi$")
     ax.set_ylabel(r"$\psi$")
-    ax.hist2d(phi_psi[0], phi_psi[1], bins=bins, density=True, norm=mpl.colors.LogNorm())
+    cmap = mpl.cm.get_cmap('plasma').copy()
+    cmap.set_bad(cmap(0))
+    ax.hist2d(phi_psi[0], phi_psi[1], bins=bins, density=True, cmap=cmap, norm=mpl.colors.LogNorm())
 
 
-def ramachandran_plot_simple(val_traj, sample_traj, **figkwargs):
-    try:
-        figkwargs['figsize']
-    except KeyError:
-        figkwargs['figsize'] = (10, 5)
+def ramachandran_plot_simple(val_traj, sample_traj, axs=None, **figkwargs):
+    if axs is None:
+        try:
+            figkwargs['figsize']
+        except KeyError:
+            figkwargs['figsize'] = (10, 5)
+        fig, [ax1, ax2] = plt.subplots(1, 2, **figkwargs)
+    else:
+        ax1, ax2 = axs
+        fig = ax1.figure
     target_phi_psi = compute_phi_psi(val_traj)
     generated_phi_psi = compute_phi_psi(sample_traj)
-
-    fig, [ax1, ax2] = plt.subplots(1, 2, **figkwargs)
     plot_phi_psi(ax1, target_phi_psi)
     plt.suptitle("Ramachandran Plot")
     ax1.set_title("target")
@@ -118,7 +160,7 @@ def ramachandran_plot_simple(val_traj, sample_traj, **figkwargs):
     return fig, [ax1, ax2]
 
 
-def ramachandran_plot(val_dataset, topology, INN, latent_target_distribution, **figkwargs):
+def ramachandran_plot(val_dataset, topology, INN, latent_target_distribution, axs=None, **figkwargs):
     with torch.no_grad():
         n_samples = len(val_dataset)
         z = latent_target_distribution.sample((n_samples,))

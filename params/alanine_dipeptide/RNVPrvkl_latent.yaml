@@ -1,4 +1,4 @@
-molecule: "Dialanine"
+molecule: "alanine_dipeptide"
 network_name: "RNVPrvklLatent"
 
 network_params: {
@@ -6,7 +6,7 @@ network_params: {
   subnet_max_width: 256,
   subnet_depth: 8,
   batch_size: 1000,
-  max_epochs:  200,
+  max_epochs:  20,
   optimizer: {
     name: "Adam",
     lr: 1.e-3,

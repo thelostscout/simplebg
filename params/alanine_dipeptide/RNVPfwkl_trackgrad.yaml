@@ -1,23 +1,24 @@
-to_sweep: "network_params:subnet_width"
 molecule: "alanine_dipeptide"
 network_name: "RNVPfwkl"
 
+
 network_params: {
   inn_depth: 24,
-  subnet_width: [64, 128, 256, 512, 1024],
-  batch_size: 1024,
-  max_epochs:  20,
-  n_dims:  66,
+  subnet_max_width: 256,
+  subnet_depth: 3,
+  batch_size: 1000,
+  max_epochs:  5,
   optimizer: {
     name: "Adam",
     lr: 3.e-5,
-    betas: [.99, .9999],
   },
+#  lr_scheduler: "onecyclelr",
   latent_target_distribution: {
     name: "Normal",
     sigma: 1.,
   },
   gradient_clip: 10.0,
+  track_grad_norm: 2,
 }
 
 training_params: {
@@ -25,5 +26,6 @@ training_params: {
 }
 
 trainer_kwargs: {
-#  overfit_batches: 1
+#  overfit_batches: 1,
+#  log_every_n_steps: 1,
 }

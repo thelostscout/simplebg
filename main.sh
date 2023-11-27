@@ -2,8 +2,8 @@
 #SBATCH --partition=single
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=5
-#SBATCH --time=36:00:00
-#SBATCH --mem=6G
+#SBATCH --time=100:00:00
+#SBATCH --mem=10G
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=kortkamp@stud.uni-heidelberg.de

@@ -13,18 +13,22 @@ from abc import ABC, abstractmethod
 
 from lightning_trainable.hparams import AttributeDict
 
-from .utils import Alignment
+from .utils import AlignmentIC, AlignmentRMS, ICTransform
 
 
 def get_network_by_name(name: str):
     if name == "RNVPfwkl":
         return RNVPfwkl
+    elif name == "RNVPICfwkl":
+        return RNVPICfwkl
     elif name == "RNVPpseudofwkl":
         return RNVPpseudofwkl
     elif name == "RNVPvar":
         return RNVPvar
     elif name == "RNVPrvkl":
         return RNVPrvkl
+    elif name == "RNVPfwrvkl":
+        return RNVPfwrvkl
     elif name == "RNVPrvklLatent":
         return RNVPrvklLatent
     elif name == "RQSfwkl":
@@ -99,6 +103,7 @@ class RvklLatentHParams(RvklHParams):
 class BaseTrainable(lt.Trainable, ABC):
     hparams: BaseHParams
     needs_energy_function = False
+    needs_system = False
 
     def __init__(self, hparams, **kwargs):
         super().__init__(hparams, **kwargs)
@@ -172,11 +177,53 @@ class BaseRNVP(BaseTrainable):
         return inn
 
 
+class BaseRNVPIC(BaseTrainable):
+    needs_system = True
+
+    def __init__(self, hparams, system=None, **kwargs):
+        if system is None:
+            raise ValueError("System must be provided for RNVPIC.")
+        self.system = system
+        super().__init__(hparams, **kwargs)
+
+    def configure_inn(self):
+        inn = Ff.SequenceINN(self.hparams.n_dims)
+        # transform to normalised internal coordinates
+        inn.append(ICTransform, system=self.system)
+        # add coupling blocks
+        for k in range(self.hparams.inn_depth):
+            inn.append(
+                Fm.RNVPCouplingBlock,
+                subnet_constructor=partial(
+                    exponential_subnet_constructor,
+                    self.hparams.subnet_max_width,
+                    self.hparams.subnet_depth,
+                    self.hparams.subnet_growth_factor,
+                )
+            )
+        return inn
+
+
+class RNVPICfwkl(BaseRNVPIC):
+    def forward_kl_loss(self, z, log_det_JF):
+        log_likelihood = self.q.log_prob(z) + log_det_JF
+        return - log_likelihood
+
+    def compute_metrics(self, batch, batch_idx):
+        z, log_det_JF = self.inn(batch)
+        loss = self.forward_kl_loss(z, log_det_JF).mean()
+        return dict(
+            loss=loss,
+        )
+
+
 class BaseRNVPEnergy(BaseRNVP):
     needs_energy_function = True
     needs_alignment = False
 
-    def __init__(self, hparams, energy_function, **kwargs):
+    def __init__(self, hparams, energy_function=None, **kwargs):
+        if energy_function is None:
+            raise ValueError("Energy function must be provided for RNVPEnergy.")
         super().__init__(hparams, **kwargs)
         self.pB_log_prob = lambda x: - energy_function(x)
         pass
@@ -203,28 +250,89 @@ class RNVPfwkl(BaseRNVP):
 class RNVPpseudofwkl(BaseRNVPEnergy):
     hparams: BaseHParams
 
-    def art_fwkl_loss(self, xG):
+    def pseudo_forward_kl_loss(self, xG):
         z, log_det_JF = self.inn(xG)
         log_pB = self.pB_log_prob(xG)
         log_pG = self.q.log_prob(z) + log_det_JF
         with torch.no_grad():
-            reweight = torch.exp(log_pB - log_pG)
-        return (reweight * log_pG).mean()
+            log_reweight = log_pB - log_pG
+            reweight = torch.exp(torch.where(
+                (log_reweight < -100),
+                log_reweight,
+                torch.full_like(log_reweight, -100.0))
+            )
+        return reweight * log_pG, log_reweight
 
     def compute_metrics(self, batch, batch_idx):
         with torch.no_grad():
             # noinspection PyTypeChecker
             z = self.q.sample((self.hparams.batch_size,))
             xG = self.inn(z, rev=True)[0]
-        loss = self.art_fwkl_loss(xG)
+        loss, reweight = self.pseudo_forward_kl_loss(xG)
         return dict(
-            loss=loss,
+            loss=loss.mean(),
+            log_reweight=reweight.mean(),
             energy=self.pB_log_prob(xG).mean().cpu().detach()
         )
 
 
-class RNVPvar(BaseRNVPEnergy):
-    hparams: BaseHParams
+class RNVPrvkl(BaseRNVPEnergy):
+    hparams: RvklHParams
+    needs_alignment = True
+
+    def __init__(self, hparams, energy_function=None, alignment_penalty=None, **kwargs):
+        if alignment_penalty is None:
+            raise ValueError("Alignment penalty must be provided for RNVPrvkl.")
+        super().__init__(hparams, energy_function, **kwargs)
+        self.is_molecule = self.hparams.is_molecule
+        self.alignment_penalty = alignment_penalty
+
+    def reverse_kl_loss(self, z):
+        xG, log_det_JG = self.inn(z, rev=True)
+        log_pB = self.pB_log_prob(xG)
+        if self.is_molecule:
+            alignment_penalty_loc, alignment_penalty_rot = self.alignment_penalty(xG)
+            alignment_penalty_loc, alignment_penalty_rot = alignment_penalty_loc.to(
+                self.device) * self.hparams.lambda_alignment, alignment_penalty_rot.to(
+                self.device) * self.hparams.lambda_alignment
+        else:
+            alignment_penalty_loc, alignment_penalty_rot = 0, 0
+
+        lambda_alignment_rot = 1.
+        return - log_pB - log_det_JG + alignment_penalty_loc + lambda_alignment_rot * alignment_penalty_rot, log_pB, log_det_JG, alignment_penalty_loc, alignment_penalty_rot
+
+    def compute_metrics(self, batch, batch_idx) -> dict:
+        # noinspection PyTypeChecker
+        z = self.q.sample((self.hparams.batch_size,))
+        loss, log_pB, log_det_JG, alignment_penalty_loc, alignment_penalty_rot = self.reverse_kl_loss(z)
+
+        return dict(
+            loss=loss.mean(),
+        )
+
+
+class RNVPfwrvkl(RNVPrvkl):
+    def forward_kl_loss(self, z, log_det_JF):
+        log_likelihood = self.q.log_prob(z) + log_det_JF
+        return - log_likelihood
+
+    def compute_metrics(self, batch, batch_idx) -> dict:
+        if batch_idx // 2:
+            z, log_det_JF = self.inn(batch)
+            loss = self.forward_kl_loss(z, log_det_JF)
+            return dict(
+                loss=loss.mean(),
+            )
+        else:
+            # noinspection PyTypeChecker
+            z = self.q.sample((self.hparams.batch_size,))
+            loss = self.reverse_kl_loss(z)[0]
+            return dict(
+                loss=loss.mean(),
+            )
+
+
+class RNVPvar(RNVPrvkl):
 
     def var_loss(self, xG):
         z, log_det_JF = self.inn(xG)
@@ -233,7 +341,7 @@ class RNVPvar(BaseRNVPEnergy):
         log_ratios = log_pB - log_pG
         with torch.no_grad():
             K = log_ratios.mean()
-        return torch.nn.functional.relu(log_ratios - K).square().mean()
+        return torch.nn.functional.relu(log_ratios - K).square()
 
     def compute_metrics(self, batch, batch_idx):
         with torch.no_grad():
@@ -244,78 +352,20 @@ class RNVPvar(BaseRNVPEnergy):
 
         loss = self.var_loss(xG)
         return dict(
-            loss=loss,
-            energy=self.pB_log_prob(xG).mean().cpu().detach()
-        )
-
-
-class RNVPfrkl(BaseRNVPEnergy):
-    hparams: BaseHParams
-
-    def fwkl_loss(self, z, log_det_JF):
-        log_likelihood = self.q.log_prob(z) + log_det_JF  # log_det_JF = - log_det_JG
-        return - log_likelihood
-
-    def rvkl_loss(self, xG):
-        z, log_det_JF = self.inn(xG)
-        log_pB = - self.energy_function(xG)
-        log_pG = self.q.log_prob(z) + log_det_JF
-        return log_pG - log_pB
-
-    def compute_metrics(self, batch, batch_idx) -> dict:
-        if batch_idx % 2:
-            z, log_det_JF = self.inn(batch)
-            loss = self.fwkl_loss(z, log_det_JF).mean()
-        else:
-            with torch.no_grad():
-                # noinspection PyTypeChecker
-                z = self.q.sample((self.hparams.batch_size,))
-                xG = self.inn(z, rev=True)[0]
-            loss = self.rvkl_loss(xG).mean()
-
-        return dict(
-            loss=loss,
-        )
-
-
-class RNVPrvkl(BaseRNVPEnergy):
-    hparams: RvklHParams
-    needs_alignment = True
-
-    def __init__(self, hparams, energy_function, alignment_penalty: Optional[Alignment.penalty], **kwargs):
-        super().__init__(hparams, energy_function, **kwargs)
-        self.is_molecule = self.hparams.is_molecule
-        self.alignment_penalty = alignment_penalty
-
-    def rvkl_loss(self, z):
-        xG, log_det_JG = self.inn(z, rev=True)
-        log_pB = self.pB_log_prob(xG)
-        if self.is_molecule:
-            alignment_penalty = self.alignment_penalty(xG) * self.hparams.lambda_alignment
-            alignment_penalty = alignment_penalty.to(self.device)
-        else:
-            alignment_penalty = 0
-
-        return - log_pB - log_det_JG + alignment_penalty, log_pB, log_det_JG, alignment_penalty
-
-    def compute_metrics(self, batch, batch_idx) -> dict:
-        # noinspection PyTypeChecker
-        z = self.q.sample((self.hparams.batch_size,))
-        loss, log_pB, log_det_JG, alignment_penalty = self.rvkl_loss(z)
-
-        return dict(
             loss=loss.mean(),
-            log_pB=log_pB.mean(),
-            log_det_JG=log_det_JG.mean(),
-            alignment_penalty=alignment_penalty.mean(),
+            energy=self.pB_log_prob(xG).mean().cpu().detach()
         )
 
 
 class RNVPrvklLatent(RNVPrvkl):
     hparams: RvklLatentHParams
 
-    def __init__(self, hparams, energy_function, alignment_penalty: Alignment.penalty, **kwargs):
+    def __init__(self, hparams, energy_function, alignment_penalty: AlignmentRMS.penalty, **kwargs):
         super().__init__(hparams, energy_function, alignment_penalty, **kwargs)
+        if hparams.latent_network_params.model_checkpoint is None:
+            hparams.latent_network_params.model_checkpoint = dict(dirpath="latent")
+        else:
+            hparams.latent_network_params.model_checkpoint["dirpath"] = "latent"
         model = RNVPfwkl(hparams.latent_network_params, **kwargs)
         self.q = TrainableDistribution(model)
 
@@ -326,6 +376,7 @@ class RNVPrvklLatent(RNVPrvkl):
         else:
             latent_logger_kwargs = dict()
         latent_logger_kwargs["sub_dir"] = "latent"
+
         # make sure that version number is the same accross latent and main training
         if logger_kwargs.get("version", None) is None:
             version_number = self.find_next_version(logger_kwargs["save_dir"], logger_kwargs["name"])
@@ -348,25 +399,21 @@ class RNVPrvklLatent(RNVPrvkl):
 
 class BaseRQS(BaseTrainable):
     def configure_inn(self):
-        subnet_width = self.hparams.subnet_width
-        inn_depth = self.hparams.inn_depth
-        n_dims = self.hparams.n_dims
-        inn = Ff.SequenceINN(n_dims)
+        inn = Ff.SequenceINN(self.hparams.n_dims)
+        # normalize inputs
         inn.append(Fm.ActNorm)
-        for k in range(inn_depth):
-            inn.append(Fm.RationalQuadraticSpline, subnet_constructor=partial(self.subnet_constructor, subnet_width))
+        # add coupling blocks
+        for k in range(self.hparams.inn_depth):
+            inn.append(
+                Fm.RationalQuadraticSpline,
+                subnet_constructor=partial(
+                    exponential_subnet_constructor,
+                    self.hparams.subnet_max_width,
+                    self.hparams.subnet_depth,
+                    self.hparams.subnet_growth_factor,
+                )
+            )
         return inn
-
-    @staticmethod
-    def subnet_constructor(subnet_width, dims_in, dims_out):
-        block = nn.Sequential(nn.Linear(dims_in, subnet_width), nn.ReLU(),
-                              nn.Linear(subnet_width, subnet_width), nn.ReLU(),
-                              nn.Linear(subnet_width, subnet_width), nn.ReLU(),
-                              nn.Linear(subnet_width, dims_out))
-
-        block[-1].weight.data.zero_()
-        block[-1].bias.data.zero_()
-        return block
 
 
 class RQSfwkl(BaseRQS):

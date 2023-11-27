@@ -3,13 +3,13 @@ network_name: "RNVPfwkl"
 
 network_params: {
   inn_depth: 10,
-  subnet_max_width: 256,
+  subnet_max_width: 2000,
   subnet_depth: 8,
   batch_size: 1000,
-  max_epochs:  20000,
+  max_epochs:  100000,
   optimizer: {
     name: "Adam",
-    lr: 3.e-5,
+    lr: 1.e-3,
   },
   lr_scheduler: "onecyclelr",
   latent_target_distribution: {

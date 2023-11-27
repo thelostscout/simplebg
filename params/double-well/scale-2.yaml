@@ -8,12 +8,16 @@ distribution_params: {
 
 network_params: {
   inn_depth: 12,
-  subnet_max_width: 128,
-  subnet_depth: 3,
+  subnet_max_width: 256,
+  subnet_growth_factor: 256,
+  subnet_depth: 5,
   batch_size: 1024,
   max_epochs:  5,
   lr_scheduler: "onecyclelr",
-  optimizer: "Adam",
+  optimizer: {
+    name: "Adam",
+    lr: 1.e-3,
+  },
   latent_target_distribution: {
     name: "Normal",
     sigma: 1.,
@@ -23,7 +27,7 @@ network_params: {
 
 training_params: {
   train_split: .7,
-  redo_premodel: False,
+  redo_premodel: True,
   iterations: 100,
   scale: .01,
 }

@@ -1,9 +1,16 @@
 import math
+from typing import Iterable, Tuple
 
 import mdtraj
 import torch
+import bgmol
+import bgflow
 
 from FrEIA.utils import force_to
+from torch import Tensor
+import FrEIA.modules as Fm
+import bgflow
+import os
 
 
 # TODO: use a premade backbone searcher
@@ -13,6 +20,36 @@ def align_backbone(coordinates, system):
     traj = mdtraj.Trajectory(coordinates, system.mdtraj_topology)
     traj = traj.superpose(traj, frame=0, atom_indices=atom_idx, parallel=True)
     return traj.xyz
+
+
+def load_data(data_path):
+    if "alanine_dipeptide" in data_path:
+        is_data_here = os.path.exists(data_path + "/Ala2TSF300.npy")
+        ala_data = bgmol.datasets.Ala2TSF300(download=not is_data_here, read=True, root=data_path)
+        system = ala_data.system
+        coordinates = ala_data.coordinates
+    else:
+        with open(data_path.rstrip("/") + "/top.pdb", 'r') as file:
+            lines = file.readlines()
+            lastline = lines[-3]
+            n_atoms = int(lastline[4:11].strip())
+            n_res = int(lastline[22:26].strip())
+            system = bgmol.systems.peptide(short=False, n_res=n_res, n_atoms=n_atoms, filepath=data_path)
+            traj = mdtraj.load_hdf5(data_path.rstrip("/") + "/traj.h5")
+            coordinates = traj.xyz
+    system.reinitialize_energy_model(temperature=300., n_workers=1)
+    return coordinates, system
+
+
+def load_model_kwargs(ModelClass, train_data, val_data, system):
+    kwargs = dict(train_data=train_data, val_data=val_data)
+    if ModelClass.needs_energy_function:
+        kwargs['energy_function'] = system.energy_model.energy
+        if ModelClass.needs_alignment:
+            kwargs['alignment'] = AlignmentIC(system)
+    elif ModelClass.needs_system:
+        kwargs['system'] = system
+    return kwargs
 
 
 class SingleTensorDataset(torch.utils.data.TensorDataset):
@@ -79,7 +116,7 @@ def dataset_setter(coordinates, system, val_split=.1, test_split=.2, seed=42):
     return out
 
 
-class Alignment:
+class AlignmentRMS:
     def __init__(self, system, reference_molecule):
         self.reference_molecule = mdtraj.Trajectory(reference_molecule, system.mdtraj_topology)
         df = system.mdtraj_topology.to_dataframe()[0]
@@ -92,3 +129,47 @@ class Alignment:
             traj = mdtraj.Trajectory(x, self.reference_molecule.topology)
             traj = traj.superpose(self.reference_molecule, frame=0, atom_indices=self.atom_idx, parallel=True)
         return torch.mean((x - traj.xyz).reshape(*x.shape[:-2], -1) ** 2, dim=-1)
+
+
+class AlignmentIC:
+    def __init__(self, system):
+        zfactory = bgmol.zmatrix.ZMatrixFactory(system.mdtraj_topology)
+        zmatrix, fixed_atoms = zfactory.build_naive()
+        self.ic_layer = bgflow.GlobalInternalCoordinateTransformation(zmatrix)
+
+    def penalty(self, x: torch.Tensor):
+        _0, _1, _2, loc, rot, _5 = self.ic_layer(x)
+        loc = loc.squeeze()
+        return torch.sum(loc ** 2, dim=-1), torch.sum(rot ** 2, dim=-1)
+
+
+class ICTransform(Fm.InvertibleModule):
+    def __init__(self, dims_in, dims_c=None, system=None):
+        super().__init__(dims_in, dims_c)
+        zfactory = bgmol.zmatrix.ZMatrixFactory(system.mdtraj_topology)
+        zmatrix, fixed_atoms = zfactory.build_naive()
+        self.bg_layer = bgflow.GlobalInternalCoordinateTransformation(zmatrix)
+
+    def output_dims(self, input_dims):
+        return input_dims
+
+    def forward(
+            self, x_or_z: Iterable[Tensor],
+            c: Iterable[Tensor] = None,
+            rev: bool = False,
+            jac: bool = True
+    ) -> Tuple[Tuple[Tensor], Tensor]:
+        x_or_z = x_or_z[0]
+        if not rev:
+            bonds, angles, torsions, loc, rot, jac_det = self.bg_layer._forward(x_or_z)
+            origin = torch.zeros([x_or_z.shape[0], 6], device=x_or_z.device)
+            out = torch.cat([bonds, angles, torsions, origin], dim=1)
+        else:
+            bonds = x_or_z[:, :self.bg_layer.dim_bonds]
+            angles = x_or_z[:, self.bg_layer.dim_bonds:self.bg_layer.dim_bonds + self.bg_layer.dim_angles]
+            torsions = x_or_z[:,
+                       self.bg_layer.dim_bonds + self.bg_layer.dim_angles:self.bg_layer.dim_bonds + self.bg_layer.dim_angles + self.bg_layer.dim_torsions]
+            loc = torch.zeros([x_or_z.shape[0], 1, 3], device=x_or_z.device)
+            rot = torch.zeros([x_or_z.shape[0], 3], device=x_or_z.device)
+            out, jac_det = self.bg_layer._inverse(bonds, angles, torsions, loc, rot)
+        return (out,), jac_det
