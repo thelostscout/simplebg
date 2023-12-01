@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=5
 #SBATCH --time=100:00:00
-#SBATCH --mem=10G
+#SBATCH --mem=30G
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=kortkamp@stud.uni-heidelberg.de
@@ -15,4 +15,4 @@ echo "$@"
 module load devel/miniconda
 module load devel/cuda
 conda activate lightning_bg
-python src/main.py "$@" --disable_progress_bar
+python3.10 src/main.py "$@" --disable_progress_bar

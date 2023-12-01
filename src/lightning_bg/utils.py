@@ -46,7 +46,7 @@ def load_model_kwargs(ModelClass, train_data, val_data, system):
     if ModelClass.needs_energy_function:
         kwargs['energy_function'] = system.energy_model.energy
         if ModelClass.needs_alignment:
-            kwargs['alignment'] = AlignmentIC(system)
+            kwargs['alignment_penalty'] = AlignmentIC(system).penalty
     elif ModelClass.needs_system:
         kwargs['system'] = system
     return kwargs
@@ -161,15 +161,14 @@ class ICTransform(Fm.InvertibleModule):
     ) -> Tuple[Tuple[Tensor], Tensor]:
         x_or_z = x_or_z[0]
         if not rev:
-            bonds, angles, torsions, loc, rot, jac_det = self.bg_layer._forward(x_or_z)
-            origin = torch.zeros([x_or_z.shape[0], 6], device=x_or_z.device)
-            out = torch.cat([bonds, angles, torsions, origin], dim=1)
+            bonds, angles, torsions, loc, rot, log_jac_det = self.bg_layer._forward(x_or_z)
+            out = torch.cat([bonds, angles, torsions, loc.squeeze(1), rot], dim=1)
         else:
             bonds = x_or_z[:, :self.bg_layer.dim_bonds]
             angles = x_or_z[:, self.bg_layer.dim_bonds:self.bg_layer.dim_bonds + self.bg_layer.dim_angles]
             torsions = x_or_z[:,
-                       self.bg_layer.dim_bonds + self.bg_layer.dim_angles:self.bg_layer.dim_bonds + self.bg_layer.dim_angles + self.bg_layer.dim_torsions]
-            loc = torch.zeros([x_or_z.shape[0], 1, 3], device=x_or_z.device)
-            rot = torch.zeros([x_or_z.shape[0], 3], device=x_or_z.device)
-            out, jac_det = self.bg_layer._inverse(bonds, angles, torsions, loc, rot)
-        return (out,), jac_det
+                              self.bg_layer.dim_bonds + self.bg_layer.dim_angles:self.bg_layer.dim_bonds + self.bg_layer.dim_angles + self.bg_layer.dim_torsions]
+            loc = x_or_z[-6:-3].unsqueeze(1)
+            rot = x_or_z[-3:]
+            out, log_jac_det = self.bg_layer._inverse(bonds, angles, torsions, loc, rot)
+        return (out,), log_jac_det.squeeze(1)

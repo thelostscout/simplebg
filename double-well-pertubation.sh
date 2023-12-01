@@ -2,15 +2,17 @@
 #SBATCH --partition=single
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --time=06:00:00
-#SBATCH --mem=3G
+#SBATCH --time=10:00:00
+#SBATCH --mem=20G
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=kortkamp@stud.uni-heidelberg.de
 
-. /home/hd/hd_hd/hd_qo191/.bashrc
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+
+. ~/.bashrc
 echo "$@"
 module load devel/miniconda
 module load devel/cuda
 conda activate lightning_bg
-python src/double-well-pertubation.py "$@"
+python3.10 src/double-well-pertubation.py "$@"

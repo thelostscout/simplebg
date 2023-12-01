@@ -90,6 +90,8 @@ class Evaluator:
         return outputs
 
     def plot_energy_and_ramachandran(self, save_loc, rg, **figkwargs):
+        if 'figsize' not in figkwargs:
+            figkwargs['figsize'] = (16, 5)
         fig, [ax1, ax2, ax3] = plt.subplots(1, 3, **figkwargs)
         self.energy_plot(rg=rg, ax=ax1)
         self.ramachandran_plot(axs=[ax2, ax3])
@@ -137,7 +139,15 @@ def plot_phi_psi(ax, phi_psi, bins=100):
     ax.set_ylabel(r"$\psi$")
     cmap = mpl.cm.get_cmap('plasma').copy()
     cmap.set_bad(cmap(0))
-    ax.hist2d(phi_psi[0], phi_psi[1], bins=bins, density=True, cmap=cmap, norm=mpl.colors.LogNorm())
+    ax.hist2d(
+        phi_psi[0],
+        phi_psi[1],
+        bins=bins,
+        density=True,
+        range=((-np.pi, np.pi),(-np.pi, np.pi)),
+        cmap=cmap,
+        norm=mpl.colors.LogNorm()
+    )
 
 
 def ramachandran_plot_simple(val_traj, sample_traj, axs=None, **figkwargs):
@@ -153,7 +163,6 @@ def ramachandran_plot_simple(val_traj, sample_traj, axs=None, **figkwargs):
     target_phi_psi = compute_phi_psi(val_traj)
     generated_phi_psi = compute_phi_psi(sample_traj)
     plot_phi_psi(ax1, target_phi_psi)
-    plt.suptitle("Ramachandran Plot")
     ax1.set_title("target")
     plot_phi_psi(ax2, generated_phi_psi)
     ax2.set_title("generated")
@@ -169,7 +178,7 @@ def ramachandran_plot(val_dataset, topology, INN, latent_target_distribution, ax
 
     val_traj = mdtraj.Trajectory(val_tensor, topology)
     sample_traj = mdtraj.Trajectory(x, topology)
-    fig, axs = ramachandran_plot_simple(val_traj, sample_traj, **figkwargs)
+    fig, axs = ramachandran_plot_simple(val_traj, sample_traj, axs=axs, **figkwargs)
     return fig, axs
 
 

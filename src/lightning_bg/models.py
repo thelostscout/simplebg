@@ -255,13 +255,9 @@ class RNVPpseudofwkl(BaseRNVPEnergy):
         log_pB = self.pB_log_prob(xG)
         log_pG = self.q.log_prob(z) + log_det_JF
         with torch.no_grad():
-            log_reweight = log_pB - log_pG
-            reweight = torch.exp(torch.where(
-                (log_reweight < -100),
-                log_reweight,
-                torch.full_like(log_reweight, -100.0))
-            )
-        return reweight * log_pG, log_reweight
+            print(log_pB.shape)
+            reweight = log_pB.softmax(dim=0) / (log_pG.softmax(dim=0) + 1e-9)
+        return reweight * log_pG, reweight
 
     def compute_metrics(self, batch, batch_idx):
         with torch.no_grad():
@@ -271,7 +267,7 @@ class RNVPpseudofwkl(BaseRNVPEnergy):
         loss, reweight = self.pseudo_forward_kl_loss(xG)
         return dict(
             loss=loss.mean(),
-            log_reweight=reweight.mean(),
+            reweight=reweight.mean(),
             energy=self.pB_log_prob(xG).mean().cpu().detach()
         )
 
@@ -341,14 +337,21 @@ class RNVPvar(RNVPrvkl):
         log_ratios = log_pB - log_pG
         with torch.no_grad():
             K = log_ratios.mean()
-        return torch.nn.functional.relu(log_ratios - K).square()
+
+        if self.is_molecule:
+            alignment_penalty_loc, alignment_penalty_rot = self.alignment_penalty(xG)
+            alignment_penalty_loc, alignment_penalty_rot = alignment_penalty_loc.to(
+                self.device) * self.hparams.lambda_alignment, alignment_penalty_rot.to(
+                self.device) * self.hparams.lambda_alignment
+        else:
+            alignment_penalty_loc, alignment_penalty_rot = 0, 0
+        return torch.nn.functional.relu(log_ratios - K).square() + alignment_penalty_loc + alignment_penalty_rot
 
     def compute_metrics(self, batch, batch_idx):
         with torch.no_grad():
             # noinspection PyTypeChecker
             z = self.q.sample((self.hparams.batch_size,))
             xG = self.inn(z, rev=True)[0]
-        # log_det_JG = self.inn(z, rev=True)[1]
 
         loss = self.var_loss(xG)
         return dict(

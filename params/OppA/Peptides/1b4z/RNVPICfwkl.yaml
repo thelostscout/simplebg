@@ -3,11 +3,11 @@ network_name: "RNVPICfwkl"
 
 
 network_params: {
-  inn_depth: 10,
-  subnet_max_width: 256,
-  subnet_depth: 8,
+  inn_depth: 24,
+  subnet_max_width: 1024,
+  subnet_depth: 6,
   batch_size: 1000,
-  max_epochs:  20000,
+  max_epochs:  4000,
   optimizer: {
     name: "Adam",
     lr: 1.e-3,
@@ -18,6 +18,13 @@ network_params: {
     sigma: 1.,
   },
   gradient_clip: 5.0,
+  model_checkpoint: {
+    monitor: "auto",
+    save_last: True,
+    every_n_epochs: 25,
+    save_top_k: 1,
+  }
+
 }
 
 training_params: {

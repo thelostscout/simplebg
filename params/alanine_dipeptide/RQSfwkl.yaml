@@ -3,11 +3,11 @@ network_name: "RQSfwkl"
 
 
 network_params: {
-  inn_depth: 8,
+  inn_depth: 10,
   subnet_max_width: 256,
   subnet_depth: 8,
   batch_size: 1000,
-  max_epochs:  200,
+  max_epochs:  2000,
   optimizer: {
     name: "Adam",
     lr: 1.e-3,
