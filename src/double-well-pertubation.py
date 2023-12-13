@@ -80,8 +80,8 @@ if __name__ == "__main__":
     params['network_params']['n_dims'] = len(params['distribution_params']['means'][0])
 
     # read model and parameter class from params
-    ModelClass = get_network_by_name(params['network_name'])
-    PreModelClass = get_network_by_name("RNVPfwkl")
+    ModelClass = get_model_by_name(params['network_name'])
+    PreModelClass = get_model_by_name("RNVPfwkl")
     PreParamClass = PreModelClass.hparams_type
     ParamClass = ModelClass.hparams_type
     hparams = ParamClass(**params['network_params'])

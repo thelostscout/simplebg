@@ -1,12 +1,14 @@
 import sys
+import os
 
 import bgmol
 from bgmol.systems.peptide import peptide
 import mdtraj
 import yaml
+import torch
 
-from lightning_bg.models import *
-from lightning_bg.utils import dataset_setter
+from lightning_bg import models
+from lightning_bg.utils import dataset_setter, AlignmentIC
 
 torch.set_float32_matmul_precision('high')
 
@@ -34,6 +36,9 @@ if __name__ == "__main__":
     # set log path
     lightning_logs = os.path.join(data_path, "lightning_logs", params['molecule'].lstrip("/"))
     # import data
+    # currently only alanine dipeptide and custom peptides are supported
+    # TODO: add support for other molecules
+    # TODO: this should be handled by the model class itself in the future or at least by a proper data loader
     molecule_path = os.path.join(data_path, "Molecules", params['molecule'].lstrip("/"))
     if params['molecule'] == "alanine_dipeptide":
         # import alanine data
@@ -42,11 +47,13 @@ if __name__ == "__main__":
         ala_data = bgmol.datasets.Ala2TSF300(download=not is_data_here, read=True, root=molecule_path)
         # define system & energy model
         system = ala_data.system
+        # need to reinitialize the energy model to set n_workers to 1 due to a bug:
+        # (https://github.com/noegroup/bgflow/issues/35)
         system.reinitialize_energy_model(temperature=300., n_workers=1)
         energy_model = system.energy_model
         coordinates = ala_data.coordinates
     else:
-        # read the top.pdb
+        # read the top.pdb file to determine the number of atoms and residues
         with open(molecule_path.rstrip("/") + "/top.pdb", 'r') as file:
             lines = file.readlines()
             lastline = lines[-3]
@@ -56,6 +63,8 @@ if __name__ == "__main__":
 
         # define system & energy model
         system = peptide(short=False, n_atoms=n_atoms, n_res=n_res, filepath=molecule_path)
+        # need to reinitialize the energy model to set n_workers to 1 due to a bug:
+        # (https://github.com/noegroup/bgflow/issues/35)
         system.reinitialize_energy_model(temperature=300., n_workers=1)
         energy_model = system.energy_model
 
@@ -74,7 +83,7 @@ if __name__ == "__main__":
         print("No learning rate found in optimizer dict. Not adjusting learning rate.")
 
     # load model class and corresponding param class
-    ModelClass = get_network_by_name(params['network_name'])
+    ModelClass = getattr(models, params['model_name'])
     ParamClass = ModelClass.hparams_type
     hparams = ParamClass(**params['network_params'])
 
@@ -85,6 +94,7 @@ if __name__ == "__main__":
     )
     print(f"{len(train_data)} training data, {len(val_data)} validation data, {len(test_data)} test data.")
     # create model
+    # TODO: this should be handled by the model class itself in the future
     if ModelClass.needs_energy_function:
         if ModelClass.needs_alignment:
             alignment = AlignmentIC(system)
@@ -103,7 +113,7 @@ if __name__ == "__main__":
         model = ModelClass(
             hparams, train_data=train_data, val_data=val_data
         )
-    # load model state from previous experiment
+    # load model state from previous experiment if a checkpoint is given
     load_from_checkpoint = params.get('load_from_checkpoint', None)
     if load_from_checkpoint is not None:
         checkpoint_path = os.path.join(data_path, "lightning_logs", load_from_checkpoint.lstrip("/"))
