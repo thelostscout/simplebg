@@ -1,5 +1,5 @@
-from lightning_bg.models import *
-from lightning_bg.utils import SingleTensorDataset
+from simplebg.models import *
+from simplebg.utils import SingleTensorDataset
 import torch
 import torch.distributions as D
 import sys

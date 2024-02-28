@@ -4,7 +4,7 @@ import os
 import bgmol
 from ipdb import set_trace as bp
 
-from lightning_bg.utils import dataset_setter
+from simplebg.utils import dataset_setter
 from manifold_learning import JointTrainableNetwork, PhaseTrainableNetwork, get_network_classes_by_name, \
     JointTrainableNetworkParams, PhaseTrainableNetworkParams, LossWeights
 from manifold_learning.callbacks import PhaseSwitcher
