@@ -10,7 +10,7 @@ import torch
 from FrEIA.utils import force_to
 from torch import Tensor
 
-from lightning_bg.models import BaseTrainable
+from simplebg.models import BaseTrainable
 
 
 # TODO: use a premade backbone searcher

@@ -8,8 +8,8 @@ import numpy as np
 import torch
 from bgmol.systems.ala2 import compute_phi_psi
 
-from lightning_bg import models
-from lightning_bg.utils import dataset_setter
+from simplebg import models
+from simplebg.utils import dataset_setter
 from .utils import load_data, load_model_kwargs, SingleTensorDataset
 import FrEIA.modules as Fm
 

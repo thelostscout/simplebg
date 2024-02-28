@@ -7,8 +7,8 @@ import mdtraj
 import yaml
 import torch
 
-from lightning_bg import models
-from lightning_bg.utils import dataset_setter, AlignmentIC
+from simplebg import models
+from simplebg.utils import dataset_setter, AlignmentIC
 
 torch.set_float32_matmul_precision('high')
 
