@@ -26,6 +26,13 @@ class BaseDataset(ABC, TensorDataset):
                              f"in the features ({len(self.ndims)}).")
         pass
 
+    def __getattr__(self, item):
+        try:
+            return super().__getattr__(item)
+        except AttributeError:
+            if item in self.channels:
+                return self.tensors[self.channels.index(item)]
+
 
 class PeptideCCDataset(BaseDataset):
     def __init__(self, coordinates: Tensor):
@@ -34,3 +41,18 @@ class PeptideCCDataset(BaseDataset):
     @property
     def channels(self):
         return ["cartesian coordinates"]
+
+class PeptideICDataset(BaseDataset):
+    def __init__(
+        self,
+        bonds: Tensor,
+        angles: Tensor,
+        torsions: Tensor,
+        origin: Tensor,
+        rotation: Tensor,
+    ):
+        super().__init__(bonds, angles, torsions, origin, rotation)
+
+    @property
+    def channels(self):
+        return ["bonds", "angles", "torsions", "origin", "rotation"]
