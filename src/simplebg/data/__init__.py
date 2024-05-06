@@ -1,6 +1,6 @@
 from . import dataset
-from . import handle
-from . import load
+from . import handler
+from . import loader
 from .dataset import BaseDataset, PeptideCCDataset
-from .handle import PetideHandlerHParams, PeptideHandler
-from .load import PeptideLoader, PeptideLoaderHParams
+from .handler import PetideHandlerHParams, PeptideHandler
+from .loader import PeptideLoader, PeptideLoaderHParams
