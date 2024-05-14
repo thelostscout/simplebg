@@ -40,16 +40,17 @@ class PeptideCCDataset(BaseDataset):
 
     @property
     def channels(self):
-        return ["cartesian coordinates"]
+        return ["cartesian_coordinates"]
+
 
 class PeptideICDataset(BaseDataset):
     def __init__(
-        self,
-        bonds: Tensor,
-        angles: Tensor,
-        torsions: Tensor,
-        origin: Tensor,
-        rotation: Tensor,
+            self,
+            bonds: Tensor,
+            angles: Tensor,
+            torsions: Tensor,
+            origin: Tensor,
+            rotation: Tensor,
     ):
         super().__init__(bonds, angles, torsions, origin, rotation)
 

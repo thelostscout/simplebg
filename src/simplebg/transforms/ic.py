@@ -7,6 +7,7 @@ import bgmol
 import bgflow
 from ..data.dataset import *
 
+
 class CartesianToInternalTransform:
     def __init__(self, system, normalize_angles=True):
         zfactory = bgmol.zmatrix.ZMatrixFactory(system.mdtraj_topology)
@@ -15,15 +16,14 @@ class CartesianToInternalTransform:
 
     def forward(self, dataset: PeptideCCDataset):
         bonds, angles, torsions, origin, rotation, log_det_j = self.transform.forward(dataset.tensors[0])
-        return PeptideICDataset(bonds, angles, torsions, origin, rotation), log_det_j
+        return PeptideICDataset(bonds, angles, torsions, origin.squeeze(), rotation), log_det_j
 
     def inverse(self, dataset: PeptideICDataset):
         coordinates, log_det_j = self.transform.inverse(
             bonds=dataset.bonds,
             angles=dataset.angles,
             torsions=dataset.torsions,
-            x0=dataset.origin,
+            x0=dataset.origin.unsqueeze(0),
             R=dataset.rotation,
         )
         return PeptideCCDataset(coordinates), log_det_j
-

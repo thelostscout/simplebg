@@ -8,7 +8,7 @@ from ..transforms.ic import CartesianToInternalTransform
 
 class PetideHandlerHParams(HParams):
     representation: Choice("cartesian_coordinates", "internal_coordinates")
-    load_params: PeptideLoaderHParams
+    loader_hparams: PeptideLoaderHParams
 
 
 class PeptideHandler:
@@ -16,7 +16,7 @@ class PeptideHandler:
 
     @property
     def name(self):
-        return self.hparams.load_params.name
+        return self.hparams.loader_hparams.name
 
     @property
     def system(self):
@@ -30,14 +30,13 @@ class PeptideHandler:
     def dataset(self):
         return self._dataset
 
-
     def __init__(self, hparams):
         self.hparams = hparams
-        dataloader = PeptideLoader(hparams.load_params)
+        dataloader = PeptideLoader(hparams.loader_hparams)
         system, xyz, temperature = dataloader.load()
         # need to reinitialize the energy model to set n_workers to 1 due to a bug:
         # https://github.com/noegroup/bgflow/issues/35
-        system = system.reinitialize_energy_model(temperature=temperature, n_workers=1)
+        system.reinitialize_energy_model(temperature=temperature, n_workers=1)
         self._system = system
         self._temperature = temperature
         dataset = PeptideCCDataset(xyz)
