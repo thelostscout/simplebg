@@ -3,17 +3,17 @@ import torch.distributions as D
 
 import lightning_trainable as lt
 
-from .data.loader import PeptideLoaderHParams, PeptideLoader, split_dataset, DataSplitHParams
+from simplebg.data.loader import PeptideLoaderHParams, PeptideLoader, split_dataset, DataSplitHParams
 
 
 class BaseHParams(lt.TrainableHParams):
-    loader_hparams: lt.hparams.HParams | dict
-    split_hparams: DataSplitHParams | dict
-    network_hparams: lt.hparams.HParams | dict
+    loader_hparams: lt.hparams.HParams
+    split_hparams: DataSplitHParams
+    network_hparams: lt.hparams.HParams
 
 
 class PeptideHParams(BaseHParams):
-    loader_hparams: PeptideLoaderHParams | dict
+    loader_hparams: PeptideLoaderHParams
 
 
 class BaseTrainable(lt.trainable.Trainable):
@@ -41,8 +41,9 @@ class BaseTrainable(lt.trainable.Trainable):
         return log_det_jf + self.q.log_prob(z)
 
     def sample(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
-        z = self.q.sample(sample_shape)
-        x = self.nn.inverse(z)[0]
+        with torch.no_grad():
+            z = self.q.sample(sample_shape)
+            x = self.nn.inverse(z)[0]
         return x
 
     def __init__(
@@ -67,11 +68,3 @@ class PeptideTrainable(BaseTrainable):
     def load_data(self):
         self.peptide = PeptideLoader(self.hparams.loader_hparams)
         return split_dataset(self.peptide.cartesian, self.hparams.split_hparams)
-
-    @property
-    def q(self):
-        raise NotImplementedError
-
-    @property
-    def nn(self):
-        raise NotImplementedError
