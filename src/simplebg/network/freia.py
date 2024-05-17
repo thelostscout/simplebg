@@ -1,11 +1,9 @@
 from functools import partial
 from typing import Iterable
 
-from torch import Tensor
-
 import FrEIA
 from FrEIA.framework import SequenceINN
-from lightning_trainable.hparams import HParams
+from torch import Tensor
 
 from . import base
 from . import subnets
@@ -16,34 +14,36 @@ def subnet_constructor(dims_in, dims_out, subnet_name, **kwargs):
     return SubnetClass(dims_in, dims_out, **kwargs)
 
 
-class FrEIAHParams(HParams):
+class FixedBlocksHParams(base.NetworkHParams):
     subnet_name: str
-    subnet_hparams: HParams
+    subnet_hparams: subnets.SubnetHParams
     coupling_blocks: int
     coupling_block_name: str
 
 
-class RNVPLinearHParams(FrEIAHParams):
+class RNVPLinearHParams(FixedBlocksHParams):
     subnet_name = "LinearSubnet"
     coupling_block_name = "AllInOneBlock"
     subnet_hparams: subnets.LinearSubnetHParams
 
 
-class RNVPExponentialHParams(FrEIAHParams):
+class RNVPExponentialHParams(FixedBlocksHParams):
     subnet_name = "ExponentialSubnet"
     coupling_block_name = "AllInOneBlock"
     subnet_hparams: subnets.ExponentialSubnetHParams
 
 
 class FrEIABase(base.BaseNetwork, SequenceINN):
+    hparams_type = base.NetworkHParams
+    hparams: base.NetworkHParams
     def __init__(
             self,
-            dims: int,
-            hparams: FrEIAHParams | dict,
+            dims_in: int,
+            hparams: base.NetworkHParams | dict,
     ):
         if isinstance(hparams, dict):
-            hparams = FrEIAHParams(**hparams)
-        super().__init__(dims)
+            hparams = self.hparams_type(**hparams)
+        super().__init__(dims_in)
         self.network_constructor(hparams=hparams)
 
     def forward(self, x: Tensor, c: Iterable[Tensor] = None):
@@ -53,19 +53,30 @@ class FrEIABase(base.BaseNetwork, SequenceINN):
         return SequenceINN.forward(self, x_or_z=z, c=c, rev=True, jac=True)
 
     @property
-    def input_dims(self):
-        return self.shapes[0]
+    def dims_in(self):
+        return self._dims_in
+
+    @dims_in.setter
+    def dims_in(self, value):
+        self._dims_in = value
+
+    @dims_in.deleter
+    def dims_in(self):
+        del self._dims_in
 
     @property
-    def output_dims(self):
+    def dims_out(self):
         return self.shapes[-1]
 
     def network_constructor(self, **kwargs):
         raise NotImplementedError
 
 
-class FixedBlock(FrEIABase):
-    def network_constructor(self, hparams: FrEIAHParams):
+class FixedBlocks(FrEIABase):
+    hparams_type = FixedBlocksHParams
+    hparams: FixedBlocksHParams
+
+    def network_constructor(self, hparams: FixedBlocksHParams):
         Block = getattr(FrEIA.modules, hparams.coupling_block_name)
         if not Block:
             raise ValueError(f"Block {hparams.coupling_block_name} not found in FrEIA.modules.")

@@ -15,6 +15,10 @@ from lightning_trainable.hparams.types import Choice
 from .dataset import PeptideCCDataset
 
 
+class LoaderHParams(HParams):
+    """This Base class is empty, but it serves as a type hint for all other loader hparams."""
+
+
 def load_from_bgmol(
         root: str,
         name: str,
@@ -24,11 +28,11 @@ def load_from_bgmol(
     filename = os.path.splitext(DataSetClass.url)[0] + ".npy"
     path = os.path.join(root, filename)
     download = not os.path.exists(path)
-    DataSet = DataSetClass(root=root, download=download, read=True)
+    dataset = DataSetClass(root=root, download=download, read=True)
 
-    xyz_as_tensor = Tensor(DataSet.xyz).view(*DataSet.xyz.shape[:-2], -1)
+    xyz_as_tensor = Tensor(dataset.xyz).view(*dataset.xyz.shape[:-2], -1)
 
-    return DataSet.system, xyz_as_tensor, DataSet.temperature
+    return dataset.system, xyz_as_tensor, dataset.temperature
 
 
 def load_from_h5(
@@ -61,7 +65,7 @@ def load_from_h5(
     return system, xyz_as_tensor, temperature
 
 
-class PeptideLoaderHParams(HParams):
+class PeptideLoaderHParams(LoaderHParams):
     root: str
     name: str
     method: Choice("bgmol", "h5")
@@ -113,7 +117,7 @@ class DataSplitHParams(HParams):
 def split_dataset(
         dataset: TensorDataset,
         hparams: DataSplitHParams | dict = None,
-):
+) -> (Subset, Subset, Subset):
     if not isinstance(hparams, DataSplitHParams):
         if hparams is None:
             hparams = DataSplitHParams()
@@ -143,5 +147,6 @@ def split_dataset(
     train_data = Subset(dataset, train_indices)
     val_data = Subset(dataset, val_indices)
     test_data = Subset(dataset, test_indices)
+    # TODO: How can I make Subsets inherit the properties of the parent dataset?
 
     return train_data, val_data, test_data

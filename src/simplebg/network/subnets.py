@@ -5,9 +5,12 @@ import warnings
 from lightning_trainable.hparams import HParams
 
 
-class LinearSubnetHParams(HParams):
+class SubnetHParams(HParams):
+    """This base class is empty, but it serves as a type hint for all other subnet hparams."""
+
+class LinearSubnetHParams(SubnetHParams):
     depth: int
-    width: int = 256
+    width: int = 128
 
 
 class LinearSubnet(nn.Sequential):
@@ -27,7 +30,7 @@ class LinearSubnet(nn.Sequential):
         self[-1].bias.data.zero_()
 
 
-class ExponentialSubnetHParams(HParams):
+class ExponentialSubnetHParams(SubnetHParams):
     depth: int
     max_width: int = 512
     growth: float = 2.0
@@ -67,7 +70,7 @@ class ExponentialSubnet(nn.Sequential):
         # create the network
         layers = []
         for i, size in enumerate(layer_sizes):
-            # round floats to integers and truncate layer sizes to max_width
+            # round floats to integers and truncate layer sizes to width
             int_size = (min(round(size[0]), max_width), min(round(size[1]), max_width))
             layers.append(nn.Linear(*int_size))
             # all but the last layer receive a ReLU activation

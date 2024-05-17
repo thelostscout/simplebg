@@ -24,7 +24,7 @@ class PeptideCCDatasetTestCase(unittest.TestCase):
     def test_ndims(self):
         t = torch.rand(3, 4)
         dataset = PeptideCCDataset(t)
-        self.assertEqual(dataset.ndims, [4])
+        self.assertEqual(dataset.n_dims, [4])
 
     def test_channels(self):
         t = torch.rand(1, 1)
@@ -42,7 +42,7 @@ class PeptideICDatasetTestCase(unittest.TestCase):
     def test_ndims(self):
         t = torch.rand(5, 4, 3)
         dataset = PeptideICDataset(*t)
-        self.assertEqual(dataset.ndims, [3, 3, 3, 3, 3])
+        self.assertEqual(dataset.n_dims, [3, 3, 3, 3, 3])
 
     def test_channels(self):
         t = torch.rand(5, 1, 1)

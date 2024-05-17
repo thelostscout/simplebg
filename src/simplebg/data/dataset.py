@@ -12,8 +12,8 @@ class BaseDataset(ABC, TensorDataset):
         pass
 
     @property
-    def ndims(self):
-        return [(len(t)) for t in self[0]]
+    def n_dims(self):
+        return [len(t) for t in self[0]]
 
     @property
     @abstractmethod
@@ -21,9 +21,9 @@ class BaseDataset(ABC, TensorDataset):
         raise NotImplementedError
 
     def check_channels(self):
-        if len(self.ndims) != len(self.channels):
+        if len(self.n_dims) != len(self.channels):
             raise ValueError(f"Number of channels ({len(self.channels)}) does not match the number of Tensors "
-                             f"in the features ({len(self.ndims)}).")
+                             f"in the features ({len(self.n_dims)}).")
         pass
 
     def __getattr__(self, item):

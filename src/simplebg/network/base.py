@@ -1,20 +1,9 @@
-import torch
-from torch import Tensor
-from torch import nn
 from abc import ABC, abstractmethod
-import torch.distributions as D
-from typing import Tuple
 
+from lightning_trainable.hparams import HParams
 
-class BaseDistribution(ABC):
-    @abstractmethod
-    def sample(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
-        pass
-
-    @abstractmethod
-    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
-        pass
-
+class NetworkHParams(HParams):
+    """This HParams class is empty, but it serves as a type hint for all other network hparams."""
 
 class BaseNetwork(ABC):
     @abstractmethod
@@ -27,10 +16,10 @@ class BaseNetwork(ABC):
 
     @property
     @abstractmethod
-    def input_dims(self):
+    def dims_in(self):
         pass
 
     @property
     @abstractmethod
-    def output_dims(self):
+    def dims_out(self):
         pass
