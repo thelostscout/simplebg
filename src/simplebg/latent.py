@@ -6,6 +6,7 @@ from torch import Tensor
 
 from lightning_trainable.hparams import HParams
 
+
 class BaseDistribution(ABC):
     @abstractmethod
     def sample(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:

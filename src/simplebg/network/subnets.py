@@ -8,12 +8,13 @@ from lightning_trainable.hparams import HParams
 class SubnetHParams(HParams):
     """This base class is empty, but it serves as a type hint for all other subnet hparams."""
 
-class LinearSubnetHParams(SubnetHParams):
+
+class ConstWidthSubnetHParams(SubnetHParams):
     depth: int
     width: int = 128
 
 
-class LinearSubnet(nn.Sequential):
+class ConstWidthSubnet(nn.Sequential):
     def __init__(self, dims_in: int, dims_out: int, depth: int, width: int):
         # sanity check
         if dims_in > width or dims_out > width:

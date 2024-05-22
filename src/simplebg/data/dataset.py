@@ -54,6 +54,7 @@ class PeptideICDataset(BaseDataset):
     ):
         super().__init__(bonds, angles, torsions, origin, rotation)
 
+    # TODO: rework this into outputs with named tuples
     @property
     def channels(self):
         return ["bonds", "angles", "torsions", "origin", "rotation"]
