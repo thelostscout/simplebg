@@ -150,7 +150,7 @@ class RvklLatentHParams(RvklHParams):
     @classmethod
     def validate_parameters(cls, hparams: AttributeDict) -> AttributeDict:
         # Make sure that the latent network has the same number of dimensions as the main network.
-        hparams.latent_network_params.n_dims = hparams.n_dims
+        hparams.latent_network_params.dims = hparams.n_dims
         return super().validate_parameters(hparams)
 
 

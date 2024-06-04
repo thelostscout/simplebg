@@ -5,7 +5,7 @@ import FrEIA
 from FrEIA.framework import SequenceINN
 from torch import Tensor
 
-from . import base
+from . import core
 from . import subnets
 
 
@@ -14,7 +14,12 @@ def subnet_constructor(dims_in, dims_out, subnet_name, **kwargs):
     return SubnetClass(dims_in, dims_out, **kwargs)
 
 
-class FixedBlocksHParams(base.NetworkHParams):
+class FrEIABaseHParams(core.NetworkHParams):
+    network: str
+
+
+class FixedBlocksHParams(FrEIABaseHParams):
+    network = "FixedBlocks"
     subnet_name: str
     subnet_hparams: subnets.SubnetHParams
     coupling_blocks: int
@@ -33,25 +38,25 @@ class RNVPExponentialHParams(FixedBlocksHParams):
     subnet_hparams: subnets.ExponentialSubnetHParams
 
 
-class FrEIABase(base.BaseNetwork, SequenceINN):
-    hparams_type = base.NetworkHParams
-    hparams: base.NetworkHParams
+class FrEIABase(core.BaseNetwork, SequenceINN):
+    hparams_type = FrEIABaseHParams
+    hparams: FrEIABaseHParams
 
     def __init__(
             self,
             dims_in: int,
-            hparams: base.NetworkHParams | dict,
+            hparams: core.NetworkHParams | dict,
     ):
         if isinstance(hparams, dict):
             hparams = self.hparams_type(**hparams)
         super().__init__(dims_in)
         self.network_constructor(hparams=hparams)
 
-    def forward(self, x: Tensor, c: Iterable[Tensor] = None) -> base.NetworkOutput:
-        return base.NetworkOutput(*SequenceINN.forward(self, x_or_z=x, c=c, rev=False, jac=True))
+    def forward(self, x: Tensor, c: Iterable[Tensor] = None) -> core.NetworkOutput:
+        return core.NetworkOutput(*SequenceINN.forward(self, x_or_z=x, c=c, rev=False, jac=True))
 
-    def reverse(self, z: Tensor, c: Iterable[Tensor] = None) -> base.NetworkOutput:
-        return base.NetworkOutput(*SequenceINN.forward(self, x_or_z=z, c=c, rev=True, jac=True))
+    def reverse(self, z: Tensor, c: Iterable[Tensor] = None) -> core.NetworkOutput:
+        return core.NetworkOutput(*SequenceINN.forward(self, x_or_z=z, c=c, rev=True, jac=True))
 
     @property
     def dims_in(self):

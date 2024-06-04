@@ -12,7 +12,7 @@ class BaseDataset(ABC, TensorDataset):
         pass
 
     @property
-    def n_dims(self):
+    def dims(self):
         return [len(t) for t in self[0]]
 
     @property
@@ -21,9 +21,9 @@ class BaseDataset(ABC, TensorDataset):
         raise NotImplementedError
 
     def check_channels(self):
-        if len(self.n_dims) != len(self.channels):
+        if len(self.dims) != len(self.channels):
             raise ValueError(f"Number of channels ({len(self.channels)}) does not match the number of Tensors "
-                             f"in the features ({len(self.n_dims)}).")
+                             f"in the features ({len(self.dims)}).")
         pass
 
     def __getattr__(self, item):
@@ -35,6 +35,7 @@ class BaseDataset(ABC, TensorDataset):
 
 
 class PeptideCCDataset(BaseDataset):
+    # TODO: this returns a list with 1 tensor as output, not intuitive. Rework?
     def __init__(self, coordinates: Tensor):
         super().__init__(coordinates)
 

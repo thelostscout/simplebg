@@ -1,3 +1,3 @@
 from . import freia
-from . import base
+from . import core
 from . import subnets

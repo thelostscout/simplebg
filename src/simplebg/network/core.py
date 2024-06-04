@@ -8,7 +8,7 @@ NetworkOutput = namedtuple("NetworkOutput", ["output", "log_det_j"])
 
 
 class NetworkHParams(HParams):
-    """This HParams class is empty, but it serves as a type hint for all other network hparams."""
+    """This base class is empty and only serves as a type hint."""
 
 
 class BaseNetwork(ABC):

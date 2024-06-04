@@ -44,10 +44,10 @@ def nll_fff(
         metrics: AttributeDict,
         **kwargs
 ):
-    if kwargs["evaluating"] or kwargs["testing"]:
-        z, x1, loss = nll_exact(metrics, **kwargs)
-    else:
+    if kwargs["training"]:
         z, x1, loss, *_ = nll_surrogate(metrics, **kwargs)
+    else:
+        z, x1, loss = nll_exact(metrics, **kwargs)
     return loss
 
 
@@ -60,7 +60,7 @@ def nll_surrogate(
     The gradient of the surrogate is the gradient of the actual negative log-likelihood.
     """
     hutchinson_samples = kwargs.get("hutchinson_samples", 1)
-    decode = kwargs["nn"].inverse
+    decode = kwargs["nn"].reverse
 
     surrogate = 0
     vs = sample_v(metrics.z, hutchinson_samples)
@@ -94,7 +94,7 @@ def nll_exact(metrics, **kwargs) -> ExactOutput:
     x1 = decode(encode(x)) -- if the reconstruction is good, then this
     is a good approximation of the nll by the dataset.
    """
-    decode = kwargs["nn"].inverse
+    decode = kwargs["nn"].reverse
     latent_distribution = kwargs["latent_distribution"]
 
     x1, dec_jac = compute_jacobian(metrics.z, decode)

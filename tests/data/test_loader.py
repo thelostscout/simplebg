@@ -1,7 +1,7 @@
 import random
 import unittest
 import torch
-from simplebg.data.loader import split_dataset, DataSplitHParams
+from simplebg.data.loader import split_dataset, SplitHParams
 
 
 # class PeptideLoaderTestCase(unittest.TestCase):
@@ -12,7 +12,7 @@ class SplitDatasetTestCase(unittest.TestCase):
         hparams = {"train_split": 0.6, "val_split": 0.2, "test_split": 0.1}
         flag = False
         try:
-            hparams = DataSplitHParams(**hparams)
+            hparams = SplitHParams(**hparams)
         except ValueError as e:
             print(e)
             flag = True
@@ -22,7 +22,7 @@ class SplitDatasetTestCase(unittest.TestCase):
         t = torch.arange(10)
         dataset = torch.utils.data.TensorDataset(t)
         hparams = {"train_split": 0.6, "val_split": 0.2, "test_split": 0.2, "seed": 0}
-        hparams = DataSplitHParams(**hparams)
+        hparams = SplitHParams(**hparams)
         random.seed(hparams.seed)
         # insert here to test if random.seed and the rng in split_dataset are independent of each other
         train_data, val_data, test_data = split_dataset(dataset, hparams)

@@ -25,12 +25,12 @@ class DistributionHParams(HParams):
 class Normal(D.MultivariateNormal):
     def __init__(
             self,
-            n_dims: int,
+            dims: int,
             sigma: float | Tensor = 1.0,
     ):
         if isinstance(sigma, float):
-            sigma = torch.ones(n_dims) * sigma
+            sigma = torch.ones(dims) * sigma
         else:
-            if sigma.shape != (n_dims,):
-                raise ValueError(f"sigma must have shape ({n_dims},), but has shape {sigma.shape}.")
-        super().__init__(loc=torch.zeros(n_dims), covariance_matrix=torch.diag(sigma ** 2))
+            if sigma.shape != (dims,):
+                raise ValueError(f"sigma must have shape ({dims},), but has shape {sigma.shape}.")
+        super().__init__(loc=torch.zeros(dims), covariance_matrix=torch.diag(sigma ** 2))

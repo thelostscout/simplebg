@@ -1,22 +1,16 @@
 import os
 import random
-import yaml
-
-from torch import Tensor
-from torch.utils.data import TensorDataset, Subset
 
 import bgmol
-from bgmol.systems.peptide import peptide
+import lightning_trainable as lt
 import mdtraj as md
-
+import yaml
+from bgmol.systems.peptide import peptide
 from lightning_trainable.hparams import HParams, AttributeDict
 from lightning_trainable.hparams.types import Choice
+from torch import Tensor
 
 from .dataset import PeptideCCDataset
-
-
-class LoaderHParams(HParams):
-    """This Base class is empty, but it serves as a type hint for all other loader hparams."""
 
 
 def load_from_bgmol(
@@ -65,6 +59,22 @@ def load_from_h5(
     return system, xyz_as_tensor, temperature
 
 
+class LoaderHParams(HParams):
+    train_split: float = 0.6
+    val_split: float = 0.2
+    test_split: float = 0.2
+    seed: int | None = None
+
+    @classmethod
+    def validate_parameters(cls, hparams: AttributeDict) -> AttributeDict:
+        hparams = super().validate_parameters(hparams)
+        if hparams.train_split + hparams.val_split + hparams.test_split != 1:
+            raise ValueError(
+                f"The sum of train_split ({hparams.train_split}), val_split ({hparams.val_split}), and "
+                f"test_split ({hparams.test_split}) must be 1.")
+        return hparams
+
+
 class PeptideLoaderHParams(LoaderHParams):
     root: str
     name: str
@@ -87,8 +97,40 @@ class PeptideLoader:
         # shutting down properly after the training is done https://github.com/noegroup/bgflow/issues/35
         system.reinitialize_energy_model(temperature=temperature, n_workers=1)
         self.system = system
-        self.cartesian = PeptideCCDataset(xyz)
+        self.raw_data = Tensor(xyz)
         self.temperature = temperature
+
+    def generate_datasets(self):
+        # shuffle the dataset indices around
+        dataset_size = len(self.raw_data)
+        indices = list(range(dataset_size))
+        # set the seed if given. We choose this method over torch.manual_seed to avoid changing the seed of the
+        # global RNG
+        rng = random.Random(self.hparams.seed)
+        rng.shuffle(indices)
+
+        # calculate the split sizes
+        train_split = int(self.hparams.train_split * dataset_size)
+        val_split = int(self.hparams.val_split * dataset_size)
+        test_split = dataset_size - train_split - val_split
+        # sanity test
+        assert dataset_size * self.hparams.test_split - 2 <= test_split <= dataset_size * self.hparams.test_split + 2, \
+            "something has gone wrong with the calculation of test_split."
+
+        # split the dataset
+        train_indices = indices[:train_split]
+        val_indices = indices[train_split:train_split + val_split]
+        test_indices = indices[train_split + val_split:]
+
+        return (
+            PeptideCCDataset(self.raw_data[train_indices]),
+            PeptideCCDataset(self.raw_data[val_indices]),
+            PeptideCCDataset(self.raw_data[test_indices])
+        )
+
+    @property
+    def dims(self) -> int:
+        return self.train_data.dims[0]
 
     def load(self):
         if self.hparams.method == "bgmol":
@@ -99,54 +141,104 @@ class PeptideLoader:
             raise ValueError(f"Method {self.hparams.method} not recognized.")
 
 
-class DataSplitHParams(HParams):
-    train_split: float = 0.6
-    val_split: float = 0.2
-    test_split: float = 0.2
-    seed: int | None = None
+class ToyLoaderHParams(LoaderHParams):
+    name: str
+    samples: int
+    kwargs: dict = {}
 
     @classmethod
     def validate_parameters(cls, hparams: AttributeDict) -> AttributeDict:
         hparams = super().validate_parameters(hparams)
-        if hparams.train_split + hparams.val_split + hparams.test_split != 1:
-            raise ValueError(f"The sum of train_split ({hparams.train_split}), val_split ({hparams.val_split}), and "
-                             f"test_split ({hparams.test_split}) must be 1.")
+        if "max_samples" in hparams.kwargs.keys():
+            raise ValueError("max_samples should not be specified in kwargs. Instead specify the number of samples in "
+                             "and the split of training, validation and test data.")
         return hparams
 
 
-def split_dataset(
-        dataset: TensorDataset,
-        hparams: DataSplitHParams | dict = None,
-) -> (Subset, Subset, Subset):
-    if not isinstance(hparams, DataSplitHParams):
-        if hparams is None:
-            hparams = DataSplitHParams()
+class ToyLoader:
+    hparams_type = ToyLoaderHParams
+    hparams: ToyLoaderHParams
+
+    def __init__(
+            self,
+            hparams: ToyLoaderHParams | dict,
+    ):
+        if not isinstance(hparams, self.hparams_type):
+            hparams = self.hparams_type(**hparams)
+        self.hparams = hparams
+
+    def generate_datasets(self):
+        # calculate the split sizes
+        train_split = int(self.hparams.train_split * self.hparams.samples)
+        val_split = int(self.hparams.val_split * self.hparams.samples)
+        test_split = self.hparams.samples - train_split - val_split
+        # sanity test
+        assert self.hparams.samples * self.hparams.test_split - 2 <= test_split <= self.hparams.samples * self.hparams.test_split + 2, \
+            "something has gone wrong with the calculation of test_split."
+
+        ToyDataSet = getattr(lt.datasets.toy, self.hparams.name)
+        return (
+            ToyDataSet(max_samples=train_split, **self.hparams.kwargs),
+            ToyDataSet(max_samples=val_split, **self.hparams.kwargs),
+            ToyDataSet(max_samples=test_split, **self.hparams.kwargs)
+        )
+
+    @property
+    def dims(self) -> int:
+        if self.hparams.name == "MoonsDataset" or self.hparams.name == "CirclesDataset":
+            return 2
         else:
-            hparams = DataSplitHParams(**hparams)
+            return self.hparams.kwargs["dims"]
 
-    # shuffle the dataset indices around
-    dataset_size = len(dataset)
-    indices = list(range(dataset_size))
-    # set the seed if given. We choose this method over torch.manual_seed to avoid changing the seed of the global RNG
-    rng = random.Random(hparams.seed)
-    rng.shuffle(indices)
 
-    # calculate the split sizes
-    train_split = int(hparams.train_split * dataset_size)
-    val_split = int(hparams.val_split * dataset_size)
-    test_split = dataset_size - train_split - val_split
-    # sanity test
-    assert dataset_size * hparams.test_split - 2 <= test_split <= dataset_size * hparams.test_split + 2, \
-        "something has gone wrong with the calculation of test_split."
-
-    # split the dataset
-    train_indices = indices[:train_split]
-    val_indices = indices[train_split:train_split + val_split]
-    test_indices = indices[train_split + val_split:]
-
-    train_data = Subset(dataset, train_indices)
-    val_data = Subset(dataset, val_indices)
-    test_data = Subset(dataset, test_indices)
-    # TODO: How can I make Subsets inherit the properties of the parent dataset?
-
-    return train_data, val_data, test_data
+# class SplitHParams(HParams):
+#     train_split: float = 0.6
+#     val_split: float = 0.2
+#     test_split: float = 0.2
+#     seed: int | None = None
+#
+#     @classmethod
+#     def validate_parameters(cls, hparams: AttributeDict) -> AttributeDict:
+#         hparams = super().validate_parameters(hparams)
+#         if hparams.train_split + hparams.val_split + hparams.test_split != 1:
+#             raise ValueError(f"The sum of train_split ({hparams.train_split}), val_split ({hparams.val_split}), and "
+#                              f"test_split ({hparams.test_split}) must be 1.")
+#         return hparams
+#
+#
+# def split_dataset(
+#         dataset: TensorDataset,
+#         hparams: SplitHParams | dict = None,
+# ) -> (Subset, Subset, Subset):
+#     if not isinstance(hparams, SplitHParams):
+#         if hparams is None:
+#             hparams = SplitHParams()
+#         else:
+#             hparams = SplitHParams(**hparams)
+#
+#     # shuffle the dataset indices around
+#     dataset_size = len(dataset)
+#     indices = list(range(dataset_size))
+#     # set the seed if given. We choose this method over torch.manual_seed to avoid changing the seed of the global RNG
+#     rng = random.Random(hparams.seed)
+#     rng.shuffle(indices)
+#
+#     # calculate the split sizes
+#     train_split = int(hparams.train_split * dataset_size)
+#     val_split = int(hparams.val_split * dataset_size)
+#     test_split = dataset_size - train_split - val_split
+#     # sanity test
+#     assert dataset_size * hparams.test_split - 2 <= test_split <= dataset_size * hparams.test_split + 2, \
+#         "something has gone wrong with the calculation of test_split."
+#
+#     # split the dataset
+#     train_indices = indices[:train_split]
+#     val_indices = indices[train_split:train_split + val_split]
+#     test_indices = indices[train_split + val_split:]
+#
+#     train_data = Subset(dataset, train_indices)
+#     val_data = Subset(dataset, val_indices)
+#     test_data = Subset(dataset, test_indices)
+#     # TODO: How can I make Subsets inherit the properties of the parent dataset?
+#
+#     return train_data, val_data, test_data

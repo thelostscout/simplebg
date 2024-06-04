@@ -1,10 +1,6 @@
 # This implements the Kullback-Leibler divergence, also known as negative log likelihood (nll).
 
-from typing import Any
-import torch
 from lightning_trainable.hparams import AttributeDict
-from .. import network
-from .. import latent
 
 
 def forward_kl(metrics: AttributeDict, **kwargs):
