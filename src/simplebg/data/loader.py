@@ -18,9 +18,10 @@ def load_from_bgmol(
         name: str,
 ):
     DataSetClass = getattr(bgmol.datasets, name)
+    if not os.path.exists(root):
+        os.makedirs(root)
     # extract filename from url and replace .tgz with .npy
-    filename = os.path.splitext(DataSetClass.url)[0] + ".npy"
-    path = os.path.join(root, filename)
+    path = os.path.join(root, DataSetClass.url.split("/")[-1].replace(".tgz", ".npy"))
     download = not os.path.exists(path)
     dataset = DataSetClass(root=root, download=download, read=True)
 
@@ -92,12 +93,12 @@ class PeptideLoader:
         if not isinstance(hparams, self.hparams_type):
             hparams = self.hparams_type(**hparams)
         self.hparams = hparams
-        system, xyz, temperature = self.load()
+        system, xyz_as_tensor, temperature = self.load()
         # need to reinitialize the energy model to set n_workers to 1 due to a bug that prevents multiple workers from
         # shutting down properly after the training is done https://github.com/noegroup/bgflow/issues/35
         system.reinitialize_energy_model(temperature=temperature, n_workers=1)
         self.system = system
-        self.raw_data = Tensor(xyz)
+        self.raw_data = xyz_as_tensor
         self.temperature = temperature
 
     def generate_datasets(self):
@@ -130,7 +131,7 @@ class PeptideLoader:
 
     @property
     def dims(self) -> int:
-        return self.train_data.dims[0]
+        return self.raw_data.shape[-1]
 
     def load(self):
         if self.hparams.method == "bgmol":
@@ -189,56 +190,3 @@ class ToyLoader:
             return 2
         else:
             return self.hparams.kwargs["dims"]
-
-
-# class SplitHParams(HParams):
-#     train_split: float = 0.6
-#     val_split: float = 0.2
-#     test_split: float = 0.2
-#     seed: int | None = None
-#
-#     @classmethod
-#     def validate_parameters(cls, hparams: AttributeDict) -> AttributeDict:
-#         hparams = super().validate_parameters(hparams)
-#         if hparams.train_split + hparams.val_split + hparams.test_split != 1:
-#             raise ValueError(f"The sum of train_split ({hparams.train_split}), val_split ({hparams.val_split}), and "
-#                              f"test_split ({hparams.test_split}) must be 1.")
-#         return hparams
-#
-#
-# def split_dataset(
-#         dataset: TensorDataset,
-#         hparams: SplitHParams | dict = None,
-# ) -> (Subset, Subset, Subset):
-#     if not isinstance(hparams, SplitHParams):
-#         if hparams is None:
-#             hparams = SplitHParams()
-#         else:
-#             hparams = SplitHParams(**hparams)
-#
-#     # shuffle the dataset indices around
-#     dataset_size = len(dataset)
-#     indices = list(range(dataset_size))
-#     # set the seed if given. We choose this method over torch.manual_seed to avoid changing the seed of the global RNG
-#     rng = random.Random(hparams.seed)
-#     rng.shuffle(indices)
-#
-#     # calculate the split sizes
-#     train_split = int(hparams.train_split * dataset_size)
-#     val_split = int(hparams.val_split * dataset_size)
-#     test_split = dataset_size - train_split - val_split
-#     # sanity test
-#     assert dataset_size * hparams.test_split - 2 <= test_split <= dataset_size * hparams.test_split + 2, \
-#         "something has gone wrong with the calculation of test_split."
-#
-#     # split the dataset
-#     train_indices = indices[:train_split]
-#     val_indices = indices[train_split:train_split + val_split]
-#     test_indices = indices[train_split + val_split:]
-#
-#     train_data = Subset(dataset, train_indices)
-#     val_data = Subset(dataset, val_indices)
-#     test_data = Subset(dataset, test_indices)
-#     # TODO: How can I make Subsets inherit the properties of the parent dataset?
-#
-#     return train_data, val_data, test_data

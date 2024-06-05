@@ -1,68 +1,35 @@
+import importlib.util
+import os
 import sys
-import lightning_trainable as lt
-from simplebg.experiment.freia import ToyExperiment, PeptideExperiment, ToyHParams, PeptideHParams
-from simplebg.network.freia import RNVPConstWidthHParams
-from simplebg.data.loader import ToyLoaderHParams, PeptideLoaderHParams
-from simplebg.latent import DistributionHParams
-from simplebg.loss.core import LossWeights
+import warnings
 
+default_rel_params_path = "../../params/"
+default_rel_logs_path = "../../logs/"
 
-# TODO: let the hparams be loaded from a params file
-hparams = ToyHParams(
-    loader_hparams=ToyLoaderHParams(
-        name="MoonsDataset",
-        samples=20_000,
-    ),
-    network_hparams=RNVPConstWidthHParams(
-        coupling_blocks=12,
-        subnet_hparams=dict(
-            depth=6,
-            width=32
-        ),
-    ),
-    latent_hparams=DistributionHParams(
-        name="Normal",
-        kwargs={"sigma": 1.}
-    ),
-    loss_weights=LossWeights(
-        nll_surrogate=1.
-    ),
-    max_epochs=200,
-    batch_size=200,
-    lr_scheduler="OneCycleLR",
-)
+param_path = sys.argv[1]
+if not os.path.isabs(param_path):
+    param_path = default_rel_params_path + param_path
+spec = importlib.util.spec_from_file_location("params", param_path)
+params = importlib.util.module_from_spec(spec)
+sys.modules["params"] = params
+spec.loader.exec_module(params)
 
-ala_hparams = PeptideHParams(
-    loader_hparams=PeptideLoaderHParams(
-        name="Ala2TSF300",
-        root="../../data",
-        method="bgmol",
-    ),
-    network_hparams=RNVPConstWidthHParams(
-        coupling_blocks=12,
-        subnet_hparams=dict(
-            depth=6,
-            width=128
-        ),
-    ),
-    latent_hparams=DistributionHParams(
-        name="Normal",
-        kwargs={"sigma": 1.}
-    ),
-    loss_weights=LossWeights(
-        forward_kl=1.
-    ),
-    max_epochs=20,
-    batch_size=1000,
-    lr_scheduler="OneCycleLR",
-)
 
 
 def main():
-    model = ToyExperiment(hparams=hparams)
-    lightning_logs = "../lightning_logs"
-    name = "moons"
-    model.fit(trainer_kwargs={}, logger_kwargs={"save_dir": lightning_logs, "name": name})
+    model = params.Experiment(hparams=params.hparams)
+    trainer_kwargs = getattr(params, "trainer_kwargs")
+    logger_kwargs = getattr(params, "logger_kwargs")
+    if logger_kwargs is not None:
+        save_dir = logger_kwargs.get("save_dir", "")
+        if not os.path.isabs(save_dir):
+            save_dir = default_rel_logs_path + save_dir
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        logger_kwargs["save_dir"] = save_dir
+    else:
+        warnings.warn("No logger_kwargs provided. Logging to default location.")
+    model.fit(trainer_kwargs=trainer_kwargs, logger_kwargs=logger_kwargs)
 
 
 if __name__ == "__main__":
