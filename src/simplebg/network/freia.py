@@ -27,15 +27,15 @@ class FixedBlocksHParams(FrEIABaseHParams):
 
 
 class RNVPConstWidthHParams(FixedBlocksHParams):
-    subnet_name = "ConstWidthSubnet"
+    subnet_name = "ConstWidth"
     coupling_block_name = "AllInOneBlock"
-    subnet_hparams: subnets.ConstWidthSubnetHParams
+    subnet_hparams: subnets.ConstWidthHParams
 
 
 class RNVPExponentialHParams(FixedBlocksHParams):
-    subnet_name = "ExponentialSubnet"
+    subnet_name = "Exponential"
     coupling_block_name = "AllInOneBlock"
-    subnet_hparams: subnets.ExponentialSubnetHParams
+    subnet_hparams: subnets.ExponentialHParams
 
 
 class FrEIABase(core.BaseNetwork, SequenceINN):
@@ -52,11 +52,11 @@ class FrEIABase(core.BaseNetwork, SequenceINN):
         super().__init__(dims_in)
         self.network_constructor(hparams=hparams)
 
-    def forward(self, x: Tensor, c: Iterable[Tensor] = None) -> core.NetworkOutput:
-        return core.NetworkOutput(*SequenceINN.forward(self, x_or_z=x, c=c, rev=False, jac=True))
+    def forward(self, x: Tensor, c: Iterable[Tensor] = None, jac=True, **kwargs) -> core.NetworkOutput:
+        return core.NetworkOutput(*SequenceINN.forward(self, x_or_z=x, c=c, rev=False, jac=jac))
 
-    def reverse(self, z: Tensor, c: Iterable[Tensor] = None) -> core.NetworkOutput:
-        return core.NetworkOutput(*SequenceINN.forward(self, x_or_z=z, c=c, rev=True, jac=True))
+    def reverse(self, z: Tensor, c: Iterable[Tensor] = None, jac=True, **kwargs) -> core.NetworkOutput:
+        return core.NetworkOutput(*SequenceINN.forward(self, x_or_z=z, c=c, rev=True, jac=jac))
 
     @property
     def dims_in(self):

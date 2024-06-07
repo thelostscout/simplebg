@@ -34,7 +34,7 @@ class BaseExperiment(lt.trainable.Trainable):
         return dict(loss=losses, **loss_dict)
 
     def log_prob(self, x):
-        z, log_det_jf = self.nn.forward(x)
+        z, log_det_jf = self.nn.forward(x, jac=True)
         return log_det_jf + self.q.log_prob(z)
 
     def sample(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
@@ -95,8 +95,8 @@ class PeptideExperiment(BaseExperiment):
 
     def compute_metrics(self, batch, batch_idx) -> dict:
         x = batch[0]
-        losses, loss_dict = loss.compute_losses(x, self.nn, self.q, self.hparams.loss_weights,
-                                                testing=self.trainer.testing, validating=self.trainer.validating)
+        losses, loss_dict = loss.compute_losses_single(x, self.nn, self.q, self.hparams.loss_weights,
+                                                       training=self.training)
         return dict(loss=losses, **loss_dict)
 
 

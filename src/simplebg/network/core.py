@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
+from collections import namedtuple
+
+from torch import Tensor
 
 from lightning_trainable.hparams import HParams
 
-from collections import namedtuple
 
 NetworkOutput = namedtuple("NetworkOutput", ["output", "log_det_j"])
 
@@ -13,11 +15,11 @@ class NetworkHParams(HParams):
 
 class BaseNetwork(ABC):
     @abstractmethod
-    def forward(self, *args, **kwargs) -> NetworkOutput:
+    def forward(self, x: Tensor, *args, jac=True, **kwargs) -> NetworkOutput:
         pass
 
     @abstractmethod
-    def reverse(self, *args, **kwargs) -> NetworkOutput:
+    def reverse(self, z: Tensor, *args, jac=True, **kwargs) -> NetworkOutput:
         pass
 
     @property

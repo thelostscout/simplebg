@@ -5,39 +5,76 @@ import warnings
 from lightning_trainable.hparams import HParams
 
 
+class Dense(nn.Sequential):
+    def __init__(
+            self,
+            width: int,
+            depth: int = 1,
+            dropout: float = 0.0,
+            activation: nn.Module = nn.ReLU,
+            residual: bool = False
+    ):
+        self.residual = residual
+        layers = []
+        for i in range(depth):
+            layers.append(nn.Linear(width, width))
+            layers.append(activation())
+        if dropout:
+            layers.append(nn.Dropout(dropout))
+        super().__init__(*layers)
+        self[0].weight.data.zero_()
+        self[0].bias.data.zero_()
+
+    def forward(self, input):
+        if self.residual:
+            return input + super().forward(input)
+        else:
+            return super().forward(input)
+
+
 class SubnetHParams(HParams):
     """This base class is empty, but it serves as a type hint for all other subnet hparams."""
 
 
-class ConstWidthSubnetHParams(SubnetHParams):
+class ConstWidthHParams(SubnetHParams):
     depth: int
     width: int = 128
+    dropout: float = 0.0
+    residual: bool = False
 
 
-class ConstWidthSubnet(nn.Sequential):
-    def __init__(self, dims_in: int, dims_out: int, depth: int, width: int):
+class ConstWidth(nn.Sequential):
+    def __init__(
+            self, 
+            dims_in: int, 
+            dims_out: int, 
+            depth: int, 
+            width: int,
+            dropout: float = 0.0,
+            residual: bool = False
+    ):
         # sanity check
         if dims_in > width or dims_out > width:
             raise ValueError(f"dims_in ({dims_in}) or dims_out ({dims_out}) is greater than width ({width}).")
         # create the network
+        # project up to width
         layers = [nn.Linear(dims_in, width), nn.ReLU()]
         for i in range(depth - 1):
-            layers.append(nn.Linear(width, width))
-            layers.append(nn.ReLU())
-        # last layer is special because dims_out is fixed, and we don't have an activation
+            layers.append(Dense(width, depth=1, dropout=dropout, residual=residual, activation=nn.ReLU))
+        # project down to dims_out
         layers.append(nn.Linear(width, dims_out))
         super().__init__(*layers)
         self[-1].weight.data.zero_()
         self[-1].bias.data.zero_()
 
 
-class ExponentialSubnetHParams(SubnetHParams):
+class ExponentialHParams(SubnetHParams):
     depth: int
     max_width: int = 512
     growth: float = 2.0
 
 
-class ExponentialSubnet(nn.Sequential):
+class Exponential(nn.Sequential):
     def __init__(self, dims_in: int, dims_out: int, depth: int, max_width: int = 512, growth: float = 2.0):
         # sanity check
         if dims_in > max_width or dims_out > max_width:

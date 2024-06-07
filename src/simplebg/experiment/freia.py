@@ -1,7 +1,6 @@
 from . import core
-from ..network import freia as freiann
-from ..loss.core import compute_losses
 from .. import latent
+from ..network import freia as freiann
 
 
 class ToyHParams(core.ToyHParams):
@@ -23,12 +22,6 @@ class ToyExperiment(core.ToyExperiment):
         self.nn = NN(dims_in, self.hparams.network_hparams)
         Q = getattr(latent, self.hparams.latent_hparams.name)
         self.q = Q(dims=self.nn.dims_out, **self.hparams.latent_hparams.kwargs)
-
-    # def compute_metrics(self, batch, batch_idx) -> dict:
-    #     x = batch
-    #     z, log_det_j = self.nn.forward(x)
-    #     loss = - self.q.log_prob(z) - log_det_j
-    #     return dict(loss=loss.mean())
 
 
 class PeptideHParams(core.PeptideHParams):
@@ -52,9 +45,3 @@ class PeptideExperiment(core.PeptideExperiment):
         # create the latent distribution
         Q = getattr(latent, self.hparams.latent_hparams.name)
         self.q = Q(dims=self.nn.dims_out, **self.hparams.latent_hparams.kwargs)
-
-    def compute_metrics(self, batch, batch_idx) -> dict:
-        x = batch[0]
-        z, log_det_j = self.nn.forward(x)
-        loss = - self.q.log_prob(z) - log_det_j
-        return dict(loss=loss.mean())

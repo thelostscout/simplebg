@@ -97,7 +97,8 @@ def compute_losses(
         training: bool,
         **kwargs,
 ):
-    raise NotImplementedError("This implementation of this function currently doesn't work. It is in active development.")
+    raise NotImplementedError("This implementation of this function currently doesn't work. It is in active "
+                              "development.")
     active = loss_weights.active_to_dict().keys()
     required_metrics = set.union(*[function_metrics[function] for function in active])
     metrics = calculate_metrics(required_metrics, x, nn, latent_distribution)

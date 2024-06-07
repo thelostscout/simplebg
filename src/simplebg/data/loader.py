@@ -98,12 +98,12 @@ class PeptideLoader:
         # shutting down properly after the training is done https://github.com/noegroup/bgflow/issues/35
         system.reinitialize_energy_model(temperature=temperature, n_workers=1)
         self.system = system
-        self.raw_data = xyz_as_tensor
+        self.data = xyz_as_tensor
         self.temperature = temperature
 
     def generate_datasets(self):
         # shuffle the dataset indices around
-        dataset_size = len(self.raw_data)
+        dataset_size = len(self.data)
         indices = list(range(dataset_size))
         # set the seed if given. We choose this method over torch.manual_seed to avoid changing the seed of the
         # global RNG
@@ -124,14 +124,14 @@ class PeptideLoader:
         test_indices = indices[train_split + val_split:]
 
         return (
-            PeptideCCDataset(self.raw_data[train_indices]),
-            PeptideCCDataset(self.raw_data[val_indices]),
-            PeptideCCDataset(self.raw_data[test_indices])
+            PeptideCCDataset(self.data[train_indices]),
+            PeptideCCDataset(self.data[val_indices]),
+            PeptideCCDataset(self.data[test_indices])
         )
 
     @property
     def dims(self) -> int:
-        return self.raw_data.shape[-1]
+        return self.data.shape[-1]
 
     def load(self):
         if self.hparams.method == "bgmol":
