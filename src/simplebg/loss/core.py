@@ -130,37 +130,37 @@ def calculate_metrics(
     if "forward_pass" in required_metrics:
         z, log_det_j_forward = forward_pass(x, nn)
         metrics.z = z
-        # The network might not compute the jacobian, which is no inherent problem. But if we want to use it,
-        # we need to make sure that the network actually did compute it.
+        # The network_class might not compute the jacobian, which is no inherent problem. But if we want to use it,
+        # we need to make sure that the network_class actually did compute it.
         if "forward_jac" in required_metrics:
             if log_det_j_forward is None:
                 raise ValueError(
-                    "log_det_j_forward is required, but was not computed. This is probably because your network does "
+                    "log_det_j_forward is required, but was not computed. This is probably because your network_class does "
                     "not support jacobian computation.")
             metrics.log_det_j_forward = log_det_j_forward
-        # a reverse pass only makes sense if there was a forward pass and the network is not bijective. In other
-        # cases we generate samples first and then pass them through the network reversely (see "generated_samples"
+        # a reverse pass only makes sense if there was a forward pass and the network_class is not bijective. In other
+        # cases we generate samples first and then pass them through the network_class reversely (see "generated_samples"
         # below).
         if "reverse_pass" in required_metrics:
             x1, log_det_j_reverse = reverse_pass(z, nn)
             metrics.x1 = x1
-            # The network might not compute the jacobian, which is no inherent problem. But if we want to use it,
-            # we need to make sure that the network actually did compute it.
+            # The network_class might not compute the jacobian, which is no inherent problem. But if we want to use it,
+            # we need to make sure that the network_class actually did compute it.
             if "reverse_jac" in required_metrics:
                 if log_det_j_reverse is None:
                     raise ValueError(
-                        "log_det_j_reverse is required, but was not computed. This is probably because your network "
+                        "log_det_j_reverse is required, but was not computed. This is probably because your network_class "
                         "does not support jacobian computation.")
                 metrics.log_det_j_reverse = log_det_j_reverse
     if "generated_samples" in required_metrics:
         x_generated, log_det_j_samples = generate_samples(x, latent_distribution, nn)
         metrics.x_generated = x_generated
-        # The network might not compute the jacobian, which is no inherent problem. But if we want to use it,
-        # we need to make sure that the network actually did compute it.
+        # The network_class might not compute the jacobian, which is no inherent problem. But if we want to use it,
+        # we need to make sure that the network_class actually did compute it.
         if "samples_jac" in required_metrics:
             if log_det_j_samples is None:
                 raise ValueError(
-                    "log_det_j_samples is required, but was not computed. This is probably because your network does "
+                    "log_det_j_samples is required, but was not computed. This is probably because your network_class does "
                     "not support jacobian computation.")
             metrics.log_det_j_samples = log_det_j_samples
     return metrics

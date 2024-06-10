@@ -49,8 +49,12 @@ class BaseExperiment(lt.trainable.Trainable):
     ):
         super().__init__(hparams)
         self.train_data, self.val_data, self.test_data = self.load_data()
-        self.nn = None
-        self.q = None
+        # the input dimensions for the network_class are determined by the data
+        dims_in = self.toy.dims
+        NN = getattr(freiann, self.hparams.network_hparams.network)
+        self.nn = NN(dims_in, self.hparams.network_hparams)
+        Q = getattr(latent, self.hparams.latent_hparams.name)
+        self.q = Q(dims=self.nn.dims_out, **self.hparams.latent_hparams.kwargs)
 
     def to(self, *args, **kwargs):
         """

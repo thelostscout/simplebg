@@ -1,8 +1,7 @@
 from simplebg.data import PeptideLoaderHParams
-from simplebg.experiment.resnet import PeptideHParams as RNPeptideHParams, PeptideExperiment as RNPeptideExperiment
-from simplebg.experiment.freia import PeptideHParams as FreiaPeptideHParams, PeptideExperiment as FreiaPeptideExperiment
 from simplebg.latent import DistributionHParams
 from simplebg.loss.core import LossWeights
+from simplebg.model import PeptideHParams as RNPeptideHParams, PeptideExperiment as RNPeptideExperiment
 from simplebg.network.freia import RNVPConstWidthHParams
 from simplebg.network.resnet import ResNetHParams
 from simplebg.network.subnets import ConstWidthHParams

@@ -1,4 +1,4 @@
-from simplebg.experiment.freia import ToyHParams, ToyExperiment
+from simplebg.model import ToyHParams, ToyExperiment
 from simplebg.network.freia import RNVPConstWidthHParams
 from simplebg.data.loader import ToyLoaderHParams
 from simplebg.latent import DistributionHParams

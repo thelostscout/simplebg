@@ -56,7 +56,7 @@ class ConstWidth(nn.Sequential):
         # sanity check
         if dims_in > width or dims_out > width:
             raise ValueError(f"dims_in ({dims_in}) or dims_out ({dims_out}) is greater than width ({width}).")
-        # create the network
+        # create the network_class
         # project up to width
         layers = [nn.Linear(dims_in, width), nn.ReLU()]
         for i in range(depth - 1):
@@ -105,7 +105,7 @@ class Exponential(nn.Sequential):
             width = new_width
         # last layer is special case because dims_out is fixed
         layer_sizes.append((width, dims_out))
-        # create the network
+        # create the network_class
         layers = []
         for i, size in enumerate(layer_sizes):
             # round floats to integers and truncate layer sizes to width

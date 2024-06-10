@@ -1,12 +1,14 @@
-from .subnets import ConstWidth, ConstWidthHParams
-from .core import BaseNetwork, NetworkOutput, NetworkHParams
 import torch
 from torch import nn
+
+from .core import BaseNetwork, NetworkOutput, NetworkHParams
+from .subnets import ConstWidth
 from .. import loss
 
 
 class ResNetHParams(NetworkHParams):
-    network = "ResNetSimple"
+    network_module = "resnet"
+    network_class = "ResNetSimple"
     bottleneck: int
     depth: int
     width: int
