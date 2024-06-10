@@ -172,7 +172,7 @@ def energy_plot(
     Plot the energy distribution of generated data compared to the validation data.
     :param val_dataset: The dataset that serves as comparison.
     :param energy_function: A function that calculates the energy of the data.
-    :param INN: The invertible neural network that transforms the data.
+    :param INN: The invertible neural network_class that transforms the data.
     :param latent_target_distribution: The distribution q* in latent space.
     :param rg: The range of the histogram.
     :param ax: The axis to plot on. If ``None``, a new figure is created.
@@ -184,7 +184,7 @@ def energy_plot(
         # need same size datasets for proper comparison
         n_samples = len(val_dataset)
         z = latent_target_distribution.sample((n_samples,))
-        # it would be nice if this could be done network agnostic
+        # it would be nice if this could be done network_class agnostic
         x = INN(z, rev=True)[0]
         energies = energy_function(x)
         val_tensor = val_dataset.get_tensor()
@@ -257,7 +257,7 @@ def ramachandran_plot(val_dataset, topology, INN, latent_target_distribution, ax
     Plot a Ramachandran plot of generated data compared to the validation data.
     :param val_dataset: The dataset that serves as comparison.
     :param topology: A mdtraj topology object that describes the molecule.
-    :param INN: The invertible neural network that transforms the data.
+    :param INN: The invertible neural network_class that transforms the data.
     :param latent_target_distribution: The distribution q* in latent space.
     :param axs: The axes to plot on. If ``None``, a new figure is created.
     :param figkwargs: kwargs for a new figure if no axes are provided.

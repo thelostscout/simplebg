@@ -10,7 +10,8 @@ NetworkOutput = namedtuple("NetworkOutput", ["output", "log_det_j"])
 
 
 class NetworkHParams(HParams):
-    """This base class is empty and only serves as a type hint."""
+    network_module: str
+    network_class: str
 
 
 class BaseNetwork(ABC):

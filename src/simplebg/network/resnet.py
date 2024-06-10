@@ -1,17 +1,21 @@
-from .subnets import ConstWidth, ConstWidthHParams
-from .core import BaseNetwork, NetworkOutput, NetworkHParams
 import torch
 from torch import nn
+
+from .core import BaseNetwork, NetworkOutput, NetworkHParams
+from . import subnets
 from .. import loss
 
 
-class ResNetHParams(NetworkHParams):
-    network = "ResNetSimple"
-    bottleneck: int
-    depth: int
-    width: int
+class ConstWidthHParams(subnets.ConstWidthHParams):
     dropout: float = .05
     residual: bool = True
+
+
+class ResNetHParams(NetworkHParams):
+    network_module = "resnet"
+    network_class = "ResNetSimple"
+    bottleneck: int
+    net_hparams: ConstWidthHParams | dict
 
 
 class ResNetSimple(BaseNetwork, nn.Module):
@@ -23,11 +27,10 @@ class ResNetSimple(BaseNetwork, nn.Module):
         super().__init__()
         if isinstance(hparams, dict):
             hparams = ResNetHParams(**hparams)
-        kwargs = dict(**hparams)
         self._dims_in = dims_in
-        self._dims_out = kwargs.pop("bottleneck")
-        self.encode = ConstWidth(dims_in=dims_in, dims_out=hparams.bottleneck, **kwargs)
-        self.decode = ConstWidth(dims_in=hparams.bottleneck, dims_out=dims_in, **kwargs)
+        self._dims_out = hparams.bottleneck
+        self.encode = subnets.ConstWidth(dims_in=dims_in, dims_out=self.dims_out, **hparams.net_hparams)
+        self.decode = subnets.ConstWidth(dims_in=hparams.bottleneck, dims_out=dims_in, **hparams.net_hparams)
 
     @property
     def dims_in(self):

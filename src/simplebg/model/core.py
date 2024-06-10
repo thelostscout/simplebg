@@ -4,7 +4,7 @@ import lightning_trainable as lt
 from FrEIA.utils import force_to
 
 from ..data import loader
-from ..network import core as network
+from .. import network
 from ..loss import core as loss
 from .. import latent
 
@@ -43,14 +43,22 @@ class BaseExperiment(lt.trainable.Trainable):
             x = self.nn.reverse(z)[0]
         return x
 
+    @property
+    def data_dims(self):
+        raise NotImplementedError
+
     def __init__(
             self,
             hparams: BaseHParams | dict
     ):
         super().__init__(hparams)
         self.train_data, self.val_data, self.test_data = self.load_data()
-        self.nn = None
-        self.q = None
+        # the input dimensions for the network_class are determined by the data
+        nn_module = getattr(network, self.hparams.network_hparams.network_module)
+        NN = getattr(nn_module, self.hparams.network_hparams.network_class)
+        self.nn = NN(self.data_dims, self.hparams.network_hparams)
+        Q = getattr(latent, self.hparams.latent_hparams.name)
+        self.q = Q(dims=self.nn.dims_out, **self.hparams.latent_hparams.kwargs)
 
     def to(self, *args, **kwargs):
         """
@@ -99,6 +107,10 @@ class PeptideExperiment(BaseExperiment):
                                                        training=self.training)
         return dict(loss=losses, **loss_dict)
 
+    @property
+    def data_dims(self):
+        return self.peptide.dims
+
 
 class ToyHParams(BaseHParams):
     loader_hparams: loader.ToyLoaderHParams
@@ -114,6 +126,10 @@ class ToyExperiment(BaseExperiment):
     ):
         self.toy = None
         super().__init__(hparams)
+
+    @property
+    def data_dims(self):
+        return self.toy.dims
 
     def load_data(self):
         self.toy = loader.ToyLoader(self.hparams.loader_hparams)

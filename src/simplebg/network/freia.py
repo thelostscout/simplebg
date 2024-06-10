@@ -15,11 +15,11 @@ def subnet_constructor(dims_in, dims_out, subnet_name, **kwargs):
 
 
 class FrEIABaseHParams(core.NetworkHParams):
-    network: str
+    network_module = "freia"
 
 
 class FixedBlocksHParams(FrEIABaseHParams):
-    network = "FixedBlocks"
+    network_class = "FixedBlocks"
     subnet_name: str
     subnet_hparams: subnets.SubnetHParams
     coupling_blocks: int

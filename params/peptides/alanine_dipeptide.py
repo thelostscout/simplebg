@@ -1,10 +1,9 @@
 from simplebg.data import PeptideLoaderHParams
-from simplebg.experiment.resnet import PeptideHParams as RNPeptideHParams, PeptideExperiment as RNPeptideExperiment
-from simplebg.experiment.freia import PeptideHParams as FreiaPeptideHParams, PeptideExperiment as FreiaPeptideExperiment
 from simplebg.latent import DistributionHParams
 from simplebg.loss.core import LossWeights
+from simplebg.model import PeptideHParams as RNPeptideHParams, PeptideExperiment as RNPeptideExperiment
 from simplebg.network.freia import RNVPConstWidthHParams
-from simplebg.network.resnet import ResNetHParams
+from simplebg.network.resnet import ResNetHParams, ConstWidthHParams as ResNetConstWidthHParams
 from simplebg.network.subnets import ConstWidthHParams
 
 Experiment = RNPeptideExperiment
@@ -14,15 +13,17 @@ freia_network_hparams = RNVPConstWidthHParams(
     subnet_hparams=ConstWidthHParams(
         depth=6,
         width=256,
-    )),
+    ))
 
 resnet_network_hparams = ResNetHParams(
     bottleneck=66,
-    depth=40,
-    width=512,
-    dropout=.05,
-    residual=True
-),
+    net_hparams=ResNetConstWidthHParams(
+        depth=50,
+        width=512,
+        dropout=.02,
+        residual=True,
+    )
+)
 
 hparams = RNPeptideHParams(
     loader_hparams=PeptideLoaderHParams(
@@ -38,7 +39,7 @@ hparams = RNPeptideHParams(
     loss_weights=LossWeights(
         nll_surrogate=1.
     ),
-    max_epochs=20,
+    max_epochs=50,
     batch_size=1000,
     lr_scheduler="OneCycleLR",
     accelerator="auto",
