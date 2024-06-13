@@ -5,7 +5,7 @@ import bgmol
 import lightning_trainable as lt
 import mdtraj as md
 import yaml
-from bgmol.systems.peptide import peptide
+from ..utils.peptide import peptide
 from lightning_trainable.hparams import HParams, AttributeDict
 from lightning_trainable.hparams.types import Choice
 from torch import Tensor

@@ -5,7 +5,7 @@ import warnings
 from lightning_trainable.hparams import HParams
 
 
-class Dense(nn.Sequential):
+class ResidualBlock(nn.Sequential):
     def __init__(
             self,
             width: int,
@@ -17,13 +17,13 @@ class Dense(nn.Sequential):
         self.residual = residual
         layers = []
         for i in range(depth):
-            layers.append(nn.Linear(width, width))
             layers.append(activation())
-        if dropout:
-            layers.append(nn.Dropout(dropout))
+            if dropout:
+                layers.append(nn.Dropout(dropout))
+            layers.append(nn.Linear(width, width))
         super().__init__(*layers)
-        self[0].weight.data.zero_()
-        self[0].bias.data.zero_()
+        self[-1].weight.data.zero_()
+        self[-1].bias.data.zero_()
 
     def forward(self, input):
         if self.residual:
@@ -39,6 +39,7 @@ class SubnetHParams(HParams):
 class ConstWidthHParams(SubnetHParams):
     depth: int
     width: int = 128
+    block_depth: int = 2
     dropout: float = 0.0
     residual: bool = False
 
@@ -50,17 +51,25 @@ class ConstWidth(nn.Sequential):
             dims_out: int, 
             depth: int, 
             width: int,
+            block_depth: int = 2,
             dropout: float = 0.0,
             residual: bool = False
     ):
         # sanity check
         if dims_in > width or dims_out > width:
-            raise ValueError(f"dims_in ({dims_in}) or dims_out ({dims_out}) is greater than width ({width}).")
-        # create the network_class
-        # project up to width
-        layers = [nn.Linear(dims_in, width), nn.ReLU()]
-        for i in range(depth - 1):
-            layers.append(Dense(width, depth=1, dropout=dropout, residual=residual, activation=nn.ReLU))
+            warnings.warn(f"dims_in ({dims_in}) or dims_out ({dims_out}) is greater than width ({width}).")
+        # create the network
+        # project up from dims_in to width
+        layers = [nn.Linear(dims_in, width)]
+        # add residual blocks
+        for i in range(depth):
+            layers.append(ResidualBlock(
+                width,
+                depth=block_depth,
+                dropout=dropout,
+                residual=residual,
+                activation=nn.ReLU
+            ))
         # project down to dims_out
         layers.append(nn.Linear(width, dims_out))
         super().__init__(*layers)
@@ -105,7 +114,7 @@ class Exponential(nn.Sequential):
             width = new_width
         # last layer is special case because dims_out is fixed
         layer_sizes.append((width, dims_out))
-        # create the network_class
+        # create the network
         layers = []
         for i, size in enumerate(layer_sizes):
             # round floats to integers and truncate layer sizes to width

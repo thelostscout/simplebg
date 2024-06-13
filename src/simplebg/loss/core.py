@@ -2,13 +2,13 @@ import torch
 from lightning_trainable.hparams import HParams, AttributeDict
 from .. import latent
 from ..network import core as network
-from . import fff2, kl, misc, fff
+from . import fff, kl, misc
 
 
 class LossWeights(HParams):
     forward_kl: float = 0.
     reverse_kl: float = 0.
-    nll_surrogate: float = 0.
+    fff: float = 0.
     reconstruction: float = 0.
 
     @classmethod
@@ -33,7 +33,7 @@ function_metrics = dict(
 function_map = dict(
     forward_kl=kl.forward_kl,
     reverse_kl=kl.reverse_kl,
-    nll_surrogate=fff2.nll_fff,
+    nll_surrogate=fff.general_loss,
     reconstruction=misc.reconstruction,
 )
 
@@ -58,30 +58,19 @@ def compute_losses_single(
         metrics.x_generated, metrics.log_det_j_samples = generate_samples(x, latent_distribution, nn)
         reverse_kl = kl.reverse_kl(metrics, target_energy=latent_distribution.log_prob).mean()
         return reverse_kl, {"reverse_kl": reverse_kl}
-    elif active == {"nll_surrogate"}:
+    elif active == {"fff"}:
         metrics.z, metrics.log_det_j_forward = forward_pass(x, nn)
-        beta = 10
-        if training:
-            nll_surrogate = fff.fff_loss(
-                x,
-                lambda y: nn.forward(y)[0],
-                lambda y: nn.reverse(y)[0],
-                beta=beta,
-            ).mean()
-        else:
-            # for validation, we need to calculate the exact loss. This is costly but ok if only done during
-            # validation steps
-            nll = fff.nll_exact(
-                x,
-                lambda y: nn.forward(y)[0],
-                lambda y: nn.reverse(y)[0],
-                latent_distribution,
-            )
-            mse = torch.sum((x - nll.x1) ** 2, dim=tuple(range(1, len(x.shape))))
-            nll_surrogate = nll.nll + beta * mse
-            nll_surrogate = nll_surrogate.mean()
-        # nll_surrogate actually contains the full loss including the reconstruction part
-        return nll_surrogate, {"nll_surrogate": nll_surrogate}
+        beta = 1_000
+        fff_loss = fff.general_loss(
+            x=x,
+            encode=lambda y: nn.forward(y)[0],
+            decode=lambda y: nn.reverse(y)[0],
+            latent_distribution=latent_distribution,
+            beta=beta,
+            training=training,
+            **kwargs,
+        )
+        return fff_loss.loss.mean(), {"nll": fff_loss.nll.mean(), "reconstruction": fff_loss.mse.mean()}
     elif active == {"reconstruction"}:
         metrics.z, metrics.log_det_j_forward = forward_pass(x, nn)
         metrics.x1, metrics.log_det_j_reverse = reverse_pass(metrics.z, nn)
@@ -100,20 +89,37 @@ def compute_losses(
     raise NotImplementedError("This implementation of this function currently doesn't work. It is in active "
                               "development.")
     active = loss_weights.active_to_dict().keys()
-    required_metrics = set.union(*[function_metrics[function] for function in active])
-    metrics = calculate_metrics(required_metrics, x, nn, latent_distribution)
-    loss_dict = AttributeDict()
-    fn_kwargs = dict(
-        latent_distribution=latent_distribution,
-        nn=nn,
-        training=training,
-        **kwargs,
-    )
-    for function in active:
-        loss_dict[function] = function_map[function](metrics, **fn_kwargs).mean()
+    loss = 0.
+    metrics = AttributeDict()
+    z = None
+    log_det_j_forward = None
+    x1 = None
+    log_det_j_reverse = None
+    x_generated = None
+    log_det_j_samples = None
+    if "fff" in active:
+        if "reconstruction" in active:
+            beta = loss_weights.rec / loss_weights.fff
+            print(f"calculating beta={beta:.1f}=reconstruction/fff")
+        else:
+            raise ValueError("The fff loss requires a weight for the reconstruction loss to calculate beta.")
+        fff_loss = fff.general_loss(
+            x=x,
+            encode=lambda y: nn.forward(y)[0],
+            decode=lambda y: nn.reverse(y)[0],
+            latent_distribution=latent_distribution,
+            beta=beta,
+            training=training,
+            **kwargs,
+        )
+        loss += fff_loss.loss.mean()
+        metrics.nll = fff_loss.nll.mean()
+        metrics.mse = fff_loss.mse.mean()
+        z = fff_loss.z
+        x1 = fff_loss.x1
 
-    loss = torch.sum(torch.Tensor([loss_dict[function] * loss_weights[function] for function in active]))
-    return loss, loss_dict
+
+
 
 
 # TODO: some loss functions calculate some of the metrics. Maybe find a clever way to check which calculate which
@@ -130,38 +136,38 @@ def calculate_metrics(
     if "forward_pass" in required_metrics:
         z, log_det_j_forward = forward_pass(x, nn)
         metrics.z = z
-        # The network_class might not compute the jacobian, which is no inherent problem. But if we want to use it,
-        # we need to make sure that the network_class actually did compute it.
+        # The network might not compute the jacobian, which is no inherent problem. But if we want to use it,
+        # we need to make sure that the network actually did compute it.
         if "forward_jac" in required_metrics:
             if log_det_j_forward is None:
                 raise ValueError(
-                    "log_det_j_forward is required, but was not computed. This is probably because your network_class does "
-                    "not support jacobian computation.")
+                    "log_det_j_forward is required, but was not computed. This is probably because your network "
+                    "does not support jacobian computation.")
             metrics.log_det_j_forward = log_det_j_forward
-        # a reverse pass only makes sense if there was a forward pass and the network_class is not bijective. In other
-        # cases we generate samples first and then pass them through the network_class reversely (see "generated_samples"
-        # below).
+        # a reverse pass only makes sense if there was a forward pass and the network is not bijective. In other
+        # cases we generate samples first and then pass them through the network reversely
+        # (see "generated_samples" below).
         if "reverse_pass" in required_metrics:
             x1, log_det_j_reverse = reverse_pass(z, nn)
             metrics.x1 = x1
-            # The network_class might not compute the jacobian, which is no inherent problem. But if we want to use it,
-            # we need to make sure that the network_class actually did compute it.
+            # The network might not compute the jacobian, which is no inherent problem. But if we want to use it,
+            # we need to make sure that the network actually did compute it.
             if "reverse_jac" in required_metrics:
                 if log_det_j_reverse is None:
                     raise ValueError(
-                        "log_det_j_reverse is required, but was not computed. This is probably because your network_class "
-                        "does not support jacobian computation.")
+                        "log_det_j_reverse is required, but was not computed. This is probably because your "
+                        "network does not support jacobian computation.")
                 metrics.log_det_j_reverse = log_det_j_reverse
     if "generated_samples" in required_metrics:
         x_generated, log_det_j_samples = generate_samples(x, latent_distribution, nn)
         metrics.x_generated = x_generated
-        # The network_class might not compute the jacobian, which is no inherent problem. But if we want to use it,
-        # we need to make sure that the network_class actually did compute it.
+        # The network might not compute the jacobian, which is no inherent problem. But if we want to use it,
+        # we need to make sure that the network actually did compute it.
         if "samples_jac" in required_metrics:
             if log_det_j_samples is None:
                 raise ValueError(
-                    "log_det_j_samples is required, but was not computed. This is probably because your network_class does "
-                    "not support jacobian computation.")
+                    "log_det_j_samples is required, but was not computed. This is probably because your network "
+                    "does not support jacobian computation.")
             metrics.log_det_j_samples = log_det_j_samples
     return metrics
 

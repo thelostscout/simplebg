@@ -1,1 +1,1 @@
-from simplebg.loss import fff, fff2
+from simplebg.loss import fff

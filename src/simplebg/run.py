@@ -2,6 +2,7 @@ import importlib.util
 import os
 import sys
 import warnings
+import simplebg
 
 default_rel_params_path = "../../params/"
 default_rel_logs_path = "../../logs/"
@@ -21,7 +22,8 @@ def main():
     sys.modules["params"] = params
     spec.loader.exec_module(params)
     # load the model class from the params module and instantiate it with the provided hparams
-    model = params.Experiment(hparams=params.hparams)
+    ModelClass = getattr(simplebg.model, params.hparams.model_class)
+    model = ModelClass(hparams=params.hparams)
     # need trainer_kwargs and logger_kwargs from params as well
     trainer_kwargs = getattr(params, "trainer_kwargs")
     logger_kwargs = getattr(params, "logger_kwargs")

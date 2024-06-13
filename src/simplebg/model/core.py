@@ -10,13 +10,14 @@ from .. import latent
 
 
 class BaseHParams(lt.TrainableHParams):
+    model_class: str
     loader_hparams: loader.LoaderHParams
     network_hparams: network.NetworkHParams
     latent_hparams: latent.DistributionHParams
     loss_weights: loss.LossWeights
 
 
-class BaseExperiment(lt.trainable.Trainable):
+class BaseModel(lt.trainable.Trainable):
     hparams_type = BaseHParams
     hparams: BaseHParams
 
@@ -53,7 +54,7 @@ class BaseExperiment(lt.trainable.Trainable):
     ):
         super().__init__(hparams)
         self.train_data, self.val_data, self.test_data = self.load_data()
-        # the input dimensions for the network_class are determined by the data
+        # the input dimensions for the network are determined by the data
         nn_module = getattr(network, self.hparams.network_hparams.network_module)
         NN = getattr(nn_module, self.hparams.network_hparams.network_class)
         self.nn = NN(self.data_dims, self.hparams.network_hparams)
@@ -83,10 +84,11 @@ class BaseExperiment(lt.trainable.Trainable):
 
 
 class PeptideHParams(BaseHParams):
+    model_class = "PeptideModel"
     loader_hparams: loader.PeptideLoaderHParams
 
 
-class PeptideExperiment(BaseExperiment):
+class PeptideModel(BaseModel):
     hparams_type = PeptideHParams
     hparams: PeptideHParams
 
@@ -113,10 +115,11 @@ class PeptideExperiment(BaseExperiment):
 
 
 class ToyHParams(BaseHParams):
+    model_class = "ToyModel"
     loader_hparams: loader.ToyLoaderHParams
 
 
-class ToyExperiment(BaseExperiment):
+class ToyModel(BaseModel):
     hparams_type = ToyHParams
     hparams: ToyHParams
 

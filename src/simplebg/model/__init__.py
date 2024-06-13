@@ -1,1 +1,1 @@
-from .core import ToyHParams, ToyExperiment, PeptideHParams, PeptideExperiment
+from .core import ToyHParams, PeptideHParams, PeptideModel, ToyModel
