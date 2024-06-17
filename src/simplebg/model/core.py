@@ -1,6 +1,7 @@
 import torch
 
 import lightning_trainable as lt
+from lightning_trainable.hparams import AttributeDict
 from FrEIA.utils import force_to
 
 from ..data import loader
@@ -16,6 +17,19 @@ class BaseHParams(lt.TrainableHParams):
     latent_hparams: latent.DistributionHParams
     loss_weights: loss.LossWeights
 
+    @classmethod
+    def validate_parameters(cls, hparams: AttributeDict) -> AttributeDict:
+        hparams = super().validate_parameters(hparams)
+        nn_module = getattr(network, hparams.network_hparams.network_module)
+        NN = getattr(nn_module, hparams.network_hparams.network_class)
+        if NN.exact_invertible:
+            if hparams.loss_weights.reconstruction:
+                raise ValueError("Your network is exactly invertible and doesn't need a reconstruction loss.")
+        else:
+            if not hparams.loss_weights.reconstruction:
+                raise ValueError("Your network is not exactly invertible and therefore needs a reconstruction loss.")
+        return hparams
+
 
 class BaseModel(lt.trainable.Trainable):
     hparams_type = BaseHParams
@@ -30,9 +44,12 @@ class BaseModel(lt.trainable.Trainable):
         raise NotImplementedError
 
     def compute_metrics(self, batch, batch_idx) -> dict:
-        losses, loss_dict = loss.compute_losses_single(batch, self.nn, self.q, self.hparams.loss_weights,
-                                                       training=self.training)
-        return dict(loss=losses, **loss_dict)
+        kwargs = dict()
+        if "reverse_kl" in self.hparams.loss_weights.active_to_dict().keys():
+            kwargs["energy_function"] = self.loader.energy_function
+        total_loss, loss_dict = loss.compute_losses(batch, self.nn, self.q, self.hparams.loss_weights,
+                                                    training=self.training, **kwargs)
+        return dict(loss=total_loss, **loss_dict)
 
     def log_prob(self, x):
         z, log_det_jf = self.nn.forward(x, jac=True)
@@ -44,20 +61,17 @@ class BaseModel(lt.trainable.Trainable):
             x = self.nn.reverse(z)[0]
         return x
 
-    @property
-    def data_dims(self):
-        raise NotImplementedError
-
     def __init__(
             self,
             hparams: BaseHParams | dict
     ):
         super().__init__(hparams)
+        self.loader = None
         self.train_data, self.val_data, self.test_data = self.load_data()
         # the input dimensions for the network are determined by the data
         nn_module = getattr(network, self.hparams.network_hparams.network_module)
         NN = getattr(nn_module, self.hparams.network_hparams.network_class)
-        self.nn = NN(self.data_dims, self.hparams.network_hparams)
+        self.nn = NN(self.loader.dims, self.hparams.network_hparams)
         Q = getattr(latent, self.hparams.latent_hparams.name)
         self.q = Q(dims=self.nn.dims_out, **self.hparams.latent_hparams.kwargs)
 
@@ -96,22 +110,24 @@ class PeptideModel(BaseModel):
             self,
             hparams: PeptideHParams | dict
     ):
-        self.peptide = None
         super().__init__(hparams)
 
     def load_data(self):
-        self.peptide = loader.PeptideLoader(self.hparams.loader_hparams)
-        return self.peptide.generate_datasets()
+        self.loader = loader.PeptideLoader(self.hparams.loader_hparams)
+        return self.loader.generate_datasets()
+
+    @property
+    def pepide(self):
+        try:
+            return self.loader
+        except AttributeError:
+            raise AttributeError("Data loader not initialized yet.")
 
     def compute_metrics(self, batch, batch_idx) -> dict:
         x = batch[0]
-        losses, loss_dict = loss.compute_losses_single(x, self.nn, self.q, self.hparams.loss_weights,
-                                                       training=self.training)
+        losses, loss_dict = loss.compute_losses(x, self.nn, self.q, self.hparams.loss_weights,
+                                                training=self.training)
         return dict(loss=losses, **loss_dict)
-
-    @property
-    def data_dims(self):
-        return self.peptide.dims
 
 
 class ToyHParams(BaseHParams):
@@ -127,13 +143,15 @@ class ToyModel(BaseModel):
             self,
             hparams: ToyHParams | dict
     ):
-        self.toy = None
         super().__init__(hparams)
 
-    @property
-    def data_dims(self):
-        return self.toy.dims
-
     def load_data(self):
-        self.toy = loader.ToyLoader(self.hparams.loader_hparams)
-        return self.toy.generate_datasets()
+        self.loader = loader.ToyLoader(self.hparams.loader_hparams)
+        return self.loader.generate_datasets()
+
+    @property
+    def toy(self):
+        try:
+            return self.loader
+        except AttributeError:
+            raise AttributeError("Data loader not initialized yet.")

@@ -3,7 +3,7 @@ from simplebg.latent import DistributionHParams
 from simplebg.loss.core import LossWeights
 from simplebg.model import PeptideHParams
 from simplebg.network.freia import RNVPConstWidthHParams
-from simplebg.network.resnet import ResNetHParams, ConstWidthHParams as ResNetConstWidthHParams
+from simplebg.network.fff import ResNetHParams, ConstWidthHParams as ResNetConstWidthHParams
 from simplebg.network.subnets import ConstWidthHParams
 
 freia_network_hparams = RNVPConstWidthHParams(
@@ -19,7 +19,7 @@ freia_network_hparams = RNVPConstWidthHParams(
 resnet_network_hparams = ResNetHParams(
     bottleneck=40,
     net_hparams=ResNetConstWidthHParams(
-        depth=20,
+        depth=51,
         width=512,
         block_depth=2,
         dropout=0.,
@@ -39,9 +39,10 @@ hparams = PeptideHParams(
         kwargs={"sigma": 1.}
     ),
     loss_weights=LossWeights(
-        fff=1.
+        forward_kl=1.,
+        reconstruction=1_000.,
     ),
-    max_epochs=50,
+    max_epochs=200,
     batch_size=1000,
     lr_scheduler="OneCycleLR",
     optimizer=dict(
@@ -52,5 +53,5 @@ hparams = PeptideHParams(
     accelerator="auto",
 )
 
-trainer_kwargs = {"fast_dev_run": False, "enable_progress_bar": False}
+trainer_kwargs = {"fast_dev_run": True, "enable_progress_bar": False}
 logger_kwargs = {"name": "ala2"}

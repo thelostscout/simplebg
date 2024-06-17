@@ -41,6 +41,7 @@ class RNVPExponentialHParams(FixedBlocksHParams):
 class FrEIABase(core.BaseNetwork, SequenceINN):
     hparams_type = FrEIABaseHParams
     hparams: FrEIABaseHParams
+    exact_invertible = True
 
     def __init__(
             self,
@@ -53,10 +54,10 @@ class FrEIABase(core.BaseNetwork, SequenceINN):
         self.network_constructor(hparams=hparams)
 
     def forward(self, x: Tensor, c: Iterable[Tensor] = None, jac=True, **kwargs) -> core.NetworkOutput:
-        return core.NetworkOutput(*SequenceINN.forward(self, x_or_z=x, c=c, rev=False, jac=jac))
+        return core.NetworkOutput(*SequenceINN.forward(self, x_or_z=x, c=c, rev=False, jac=jac), dict())
 
     def reverse(self, z: Tensor, c: Iterable[Tensor] = None, jac=True, **kwargs) -> core.NetworkOutput:
-        return core.NetworkOutput(*SequenceINN.forward(self, x_or_z=z, c=c, rev=True, jac=jac))
+        return core.NetworkOutput(*SequenceINN.forward(self, x_or_z=z, c=c, rev=True, jac=jac), dict())
 
     @property
     def dims_in(self):

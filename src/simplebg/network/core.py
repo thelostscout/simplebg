@@ -5,8 +5,7 @@ from torch import Tensor
 
 from lightning_trainable.hparams import HParams
 
-
-NetworkOutput = namedtuple("NetworkOutput", ["output", "log_det_j"])
+NetworkOutput = namedtuple("NetworkOutput", ["output", "log_det_j", "byproducts"])
 
 
 class NetworkHParams(HParams):
@@ -15,20 +14,22 @@ class NetworkHParams(HParams):
 
 
 class BaseNetwork(ABC):
+    exact_invertible: bool
+
     @abstractmethod
     def forward(self, x: Tensor, *args, jac=True, **kwargs) -> NetworkOutput:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def reverse(self, z: Tensor, *args, jac=True, **kwargs) -> NetworkOutput:
-        pass
+        raise NotImplementedError
 
     @property
     @abstractmethod
     def dims_in(self):
-        pass
+        raise NotImplementedError
 
     @property
     @abstractmethod
     def dims_out(self):
-        pass
+        raise NotImplementedError
