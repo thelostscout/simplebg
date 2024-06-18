@@ -100,6 +100,7 @@ class PeptideLoader:
         self.system = system
         self.data = xyz_as_tensor
         self.temperature = temperature
+        self.energy_function = system.energy_model.energy
 
     def generate_datasets(self):
         # shuffle the dataset indices around
@@ -174,7 +175,8 @@ class ToyLoader:
         val_split = int(self.hparams.val_split * self.hparams.samples)
         test_split = self.hparams.samples - train_split - val_split
         # sanity test
-        assert self.hparams.samples * self.hparams.test_split - 2 <= test_split <= self.hparams.samples * self.hparams.test_split + 2, \
+        assert (self.hparams.samples * self.hparams.test_split - 2 <= test_split <=
+                self.hparams.samples * self.hparams.test_split + 2), \
             "something has gone wrong with the calculation of test_split."
 
         ToyDataSet = getattr(lt.datasets.toy, self.hparams.name)

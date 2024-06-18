@@ -123,12 +123,6 @@ class PeptideModel(BaseModel):
         except AttributeError:
             raise AttributeError("Data loader not initialized yet.")
 
-    def compute_metrics(self, batch, batch_idx) -> dict:
-        x = batch[0]
-        losses, loss_dict = loss.compute_losses(x, self.nn, self.q, self.hparams.loss_weights,
-                                                training=self.training)
-        return dict(loss=losses, **loss_dict)
-
 
 class ToyHParams(BaseHParams):
     model_class = "ToyModel"
