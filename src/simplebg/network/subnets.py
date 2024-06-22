@@ -1,8 +1,11 @@
+import torch
 from torch import nn
 import math
 import warnings
 
 from lightning_trainable.hparams import HParams
+import bgflow
+import bgmol
 
 
 class ResidualBlock(nn.Sequential):
@@ -46,10 +49,10 @@ class ConstWidthHParams(SubnetHParams):
 
 class ConstWidth(nn.Sequential):
     def __init__(
-            self, 
-            dims_in: int, 
-            dims_out: int, 
-            depth: int, 
+            self,
+            dims_in: int,
+            dims_out: int,
+            depth: int,
             width: int,
             block_depth: int = 2,
             dropout: float = 0.0,

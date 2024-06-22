@@ -1,10 +1,8 @@
-from simplebg.model import ToyHParams, ToyExperiment
+from simplebg.model import ToyHParams
 from simplebg.network.freia import RNVPConstWidthHParams
-from simplebg.data.loader import ToyLoaderHParams
+from simplebg.data.loaders import ToyLoaderHParams
 from simplebg.latent import DistributionHParams
 from simplebg.loss.core import LossWeights
-
-Experiment = ToyExperiment
 
 hparams = ToyHParams(
     loader_hparams=ToyLoaderHParams(

@@ -1,16 +1,20 @@
 import os
 import random
+from torch import Tensor
+import mdtraj as md
+import yaml
+from abc import ABC, abstractmethod
+from collections import namedtuple
 
 import bgmol
 import lightning_trainable as lt
-import mdtraj as md
-import yaml
-from ..utils.peptide import peptide
 from lightning_trainable.hparams import HParams, AttributeDict
 from lightning_trainable.hparams.types import Choice
-from torch import Tensor
 
+from ..utils.peptide import peptide
 from .dataset import PeptideCCDataset
+
+datasets = namedtuple("datasets", ["train", "val", "test"])
 
 
 def load_from_bgmol(
@@ -76,13 +80,35 @@ class LoaderHParams(HParams):
         return hparams
 
 
+class Loader(ABC):
+    hparams_type = LoaderHParams
+    hparams: LoaderHParams
+
+    def __init__(
+            self,
+            hparams: LoaderHParams | dict,
+    ):
+        if not isinstance(hparams, self.hparams_type):
+            hparams = self.hparams_type(**hparams)
+        self.hparams = hparams
+
+    @abstractmethod
+    def generate_datasets(self) -> datasets:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def dims(self) -> int:
+        raise NotImplementedError
+
+
 class PeptideLoaderHParams(LoaderHParams):
     root: str
     name: str
     method: Choice("bgmol", "h5")
 
 
-class PeptideLoader:
+class PeptideLoader(Loader):
     hparams_type = PeptideLoaderHParams
     hparams: PeptideLoaderHParams
 
@@ -90,9 +116,7 @@ class PeptideLoader:
             self,
             hparams: PeptideLoaderHParams | dict,
     ):
-        if not isinstance(hparams, self.hparams_type):
-            hparams = self.hparams_type(**hparams)
-        self.hparams = hparams
+        super().__init__(hparams)
         system, xyz_as_tensor, temperature = self.load()
         # need to reinitialize the energy model to set n_workers to 1 due to a bug that prevents multiple workers from
         # shutting down properly after the training is done https://github.com/noegroup/bgflow/issues/35
@@ -157,17 +181,9 @@ class ToyLoaderHParams(LoaderHParams):
         return hparams
 
 
-class ToyLoader:
+class ToyLoader(Loader):
     hparams_type = ToyLoaderHParams
     hparams: ToyLoaderHParams
-
-    def __init__(
-            self,
-            hparams: ToyLoaderHParams | dict,
-    ):
-        if not isinstance(hparams, self.hparams_type):
-            hparams = self.hparams_type(**hparams)
-        self.hparams = hparams
 
     def generate_datasets(self):
         # calculate the split sizes

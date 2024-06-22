@@ -47,6 +47,7 @@ class FrEIABase(core.BaseNetwork, SequenceINN):
             self,
             dims_in: int,
             hparams: core.NetworkHParams | dict,
+            **kwargs,
     ):
         if isinstance(hparams, dict):
             hparams = self.hparams_type(**hparams)

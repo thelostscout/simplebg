@@ -14,16 +14,21 @@ freia_network_hparams = RNVPConstWidthHParams(
         block_depth=2,
         dropout=0.,
         residual=True,
-    ))
+    )
+)
 
 resnet_network_hparams = ResNetHParams(
-    bottleneck=40,
+    bottleneck=66,
     net_hparams=ResNetConstWidthHParams(
-        depth=51,
+        depth=31,
         width=512,
         block_depth=2,
         dropout=0.,
         residual=True,
+    ),
+    transform="ic",
+    transform_kwargs=dict(
+        normalize_angles=True
     )
 )
 
@@ -40,10 +45,10 @@ hparams = PeptideHParams(
     ),
     loss_weights=LossWeights(
         forward_kl=1.,
-        reconstruction=1_000.,
+        reconstruction=5_000.,
     ),
-    max_epochs=200,
-    batch_size=1000,
+    max_epochs=20,
+    batch_size=5000,
     lr_scheduler="OneCycleLR",
     optimizer=dict(
         name="Adam",
@@ -51,7 +56,9 @@ hparams = PeptideHParams(
         betas=[.99, .9999],
     ),
     accelerator="auto",
+    track_grad_norm=2,
+    gradient_clip=1_000.,
 )
 
-trainer_kwargs = {"fast_dev_run": True, "enable_progress_bar": False}
+trainer_kwargs = {"fast_dev_run": False, "enable_progress_bar": False}
 logger_kwargs = {"name": "ala2"}

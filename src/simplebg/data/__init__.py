@@ -1,4 +1,4 @@
 from . import dataset
-from . import loader
+from . import loaders
 from .dataset import BaseDataset, PeptideCCDataset
-from .loader import PeptideLoader, PeptideLoaderHParams
+from .loaders import PeptideLoader, PeptideLoaderHParams
