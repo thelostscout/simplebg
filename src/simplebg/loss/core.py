@@ -33,9 +33,6 @@ def compute_losses(
     if nn_kwargs is None:
         nn_kwargs = dict()
     active = loss_weights.active_to_dict().keys()
-    if not nn.exact_invertible and "reconstruction" not in active and training:
-        raise ValueError("Your network is not exactly invertible and therefore needs a reconstruction loss during "
-                         "training.")
     loss_dict = dict()
     forward_pass = None
     if "forward_kl" in active:
@@ -43,7 +40,7 @@ def compute_losses(
         forward_kl = kl.forward_kl(forward_pass.output, forward_pass.log_det_j, latent_distribution).mean()
         loss_dict["forward_kl"] = forward_kl
     if "reverse_kl" in active:
-        z_generated = latent_distribution.sample(x.shape[0])
+        z_generated = latent_distribution.sample((x.shape[0],))
         reverse_pass = nn.reverse(z_generated, jac=True, **nn_kwargs)
         reverse_kl = kl.reverse_kl(reverse_pass.output, reverse_pass.log_det_j, kwargs["energy_function"]).mean()
         loss_dict["reverse_kl"] = reverse_kl
@@ -58,5 +55,5 @@ def compute_losses(
             x1 = nn.reverse(z, jac=False, **nn_kwargs).output
         reconstruction = fff.reconstruction_loss(x, x1).mean()
         loss_dict["reconstruction"] = reconstruction
-    total_loss = sum([v * loss_dict[k] for k, v in loss_weights.items() if v > 0])
+    total_loss = torch.nansum(torch.stack([v * loss_dict[k] for k, v in loss_weights.items() if v > 0]))
     return total_loss, loss_dict

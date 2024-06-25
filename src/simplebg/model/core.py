@@ -7,7 +7,7 @@ from FrEIA.utils import force_to
 from ..data import loaders
 from .. import network
 from ..loss import core as loss
-from .. import latent
+from .. import latent, evaluate
 
 
 class BaseHParams(lt.TrainableHParams):
@@ -108,6 +108,13 @@ class PeptideModel(BaseModel):
         self.nn = NN(self.loader.dims, self.hparams.network_hparams, system=self.loader.system)
         Q = getattr(latent, self.hparams.latent_hparams.name)
         self.q = Q(dims=self.nn.dims_out, **self.hparams.latent_hparams.kwargs)
+
+    def compute_metrics(self, batch, batch_idx) -> dict:
+        metrics = super().compute_metrics(batch, batch_idx)
+        if not self.training:
+            energy = evaluate.sample_energies(self, n_samples=batch[0].shape[0]//10)
+            metrics["mean_energy"] = energy.mean()
+        return metrics
 
     @property
     def peptide(self):

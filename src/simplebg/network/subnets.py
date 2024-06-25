@@ -14,19 +14,25 @@ class ResidualBlock(nn.Sequential):
             width: int,
             depth: int = 1,
             dropout: float = 0.0,
+            residual: bool = False,
+            batch_norm: bool = False,
             activation: nn.Module = nn.ReLU,
-            residual: bool = False
     ):
         self.residual = residual
         layers = []
         for i in range(depth):
+            if batch_norm:
+                layers.append(nn.BatchNorm1d(width))
             layers.append(activation())
             if dropout:
                 layers.append(nn.Dropout(dropout))
             layers.append(nn.Linear(width, width))
         super().__init__(*layers)
-        self[-1].weight.data.zero_()
-        self[-1].bias.data.zero_()
+        # initialize weights and biases according to arXiv:1712.05577
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.orthogonal_(m.weight)
+                nn.init.zeros_(m.bias)
 
     def forward(self, input):
         if self.residual:
@@ -45,6 +51,7 @@ class ConstWidthHParams(SubnetHParams):
     block_depth: int = 2
     dropout: float = 0.0
     residual: bool = False
+    batch_norm: bool = False
 
 
 class ConstWidth(nn.Sequential):
@@ -56,7 +63,8 @@ class ConstWidth(nn.Sequential):
             width: int,
             block_depth: int = 2,
             dropout: float = 0.0,
-            residual: bool = False
+            residual: bool = False,
+            batch_norm: bool = False
     ):
         # sanity check
         if dims_in > width or dims_out > width:
@@ -71,6 +79,7 @@ class ConstWidth(nn.Sequential):
                 depth=block_depth,
                 dropout=dropout,
                 residual=residual,
+                batch_norm=batch_norm,
                 activation=nn.ReLU
             ))
         # project down to dims_out

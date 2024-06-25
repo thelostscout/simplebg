@@ -58,8 +58,9 @@ class ShowTraj(ipw.VBox):
 
 def sample_energies(model, n_samples=1000):
     """Sample energies from a model."""
-    if not hasattr(model, "peptide"):
+    try:
+        samples = model.sample((n_samples,))
+        energies = model.loader.energy_function(samples)
+    except AttributeError:
         raise ValueError("Model does not have an energy method.")
-    samples = model.sample((n_samples,))
-    energies = model.peptide.system.energy_model.energy(samples)
     return energies.squeeze(1)
