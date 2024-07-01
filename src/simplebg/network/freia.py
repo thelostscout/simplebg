@@ -9,48 +9,37 @@ from . import core
 from . import subnets
 
 
-def subnet_constructor(dims_in, dims_out, subnet_name, **kwargs):
-    SubnetClass = getattr(subnets, subnet_name)
+def subnet_constructor(dims_in, dims_out, subnet_class, **kwargs):
+    SubnetClass = getattr(subnets, subnet_class)
     return SubnetClass(dims_in, dims_out, **kwargs)
 
 
-class FrEIABaseHParams(core.NetworkHParams):
+class BaseFrEIAHParams(core.NetworkHParams):
     network_module = "freia"
 
 
-class FixedBlocksHParams(FrEIABaseHParams):
+class FixedBlocksHParams(BaseFrEIAHParams):
     network_class = "FixedBlocks"
-    subnet_name: str
     subnet_hparams: subnets.SubnetHParams
     coupling_blocks: int
     coupling_block_name: str
 
 
-class RNVPConstWidthHParams(FixedBlocksHParams):
-    subnet_name = "ConstWidth"
-    coupling_block_name = "AllInOneBlock"
-    subnet_hparams: subnets.ConstWidthHParams
-
-
-class RNVPExponentialHParams(FixedBlocksHParams):
-    subnet_name = "Exponential"
-    coupling_block_name = "AllInOneBlock"
-    subnet_hparams: subnets.ExponentialHParams
-
-
-class FrEIABase(core.BaseNetwork, SequenceINN):
-    hparams_type = FrEIABaseHParams
-    hparams: FrEIABaseHParams
+class BaseFrEIA(core.BaseNetwork, SequenceINN):
+    hparams_type = BaseFrEIAHParams
+    hparams: BaseFrEIAHParams
     exact_invertible = True
 
     def __init__(
             self,
             dims_in: int,
-            hparams: core.NetworkHParams | dict,
+            hparams: BaseFrEIAHParams | dict,
             **kwargs,
     ):
         if isinstance(hparams, dict):
-            hparams = self.hparams_type(**hparams)
+            self.hparams = self.hparams_type(**hparams)
+        else:
+            self.hparams = hparams
         super().__init__(dims_in)
         self.network_constructor(hparams=hparams)
 
@@ -80,7 +69,7 @@ class FrEIABase(core.BaseNetwork, SequenceINN):
         raise NotImplementedError
 
 
-class FixedBlocks(FrEIABase):
+class FixedBlocks(BaseFrEIA):
     hparams_type = FixedBlocksHParams
     hparams: FixedBlocksHParams
 
@@ -88,12 +77,14 @@ class FixedBlocks(FrEIABase):
         Block = getattr(FrEIA.modules, hparams.coupling_block_name)
         if not Block:
             raise ValueError(f"Block {hparams.coupling_block_name} not found in FrEIA.modules.")
+        subnet_hparams = hparams.subnet_hparams
+        subnet_class = subnet_hparams.pop("subnet_class")
         for i in range(hparams.coupling_blocks):
             self.append(
                 module_class=Block,
                 subnet_constructor=partial(
                     subnet_constructor,
-                    subnet_name=hparams.subnet_name,
-                    **hparams.subnet_hparams
+                    subnet_name=subnet_class,
+                    **subnet_hparams
                 ),
             )

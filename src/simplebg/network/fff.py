@@ -1,14 +1,9 @@
-import bgmol.systems
-import numpy as np
-import torch
-from torch import nn
-
 import fff
 from lightning_trainable.hparams import AttributeDict
+from torch import nn
 
-from .core import BaseNetwork, NetworkOutput, NetworkHParams
 from . import subnets, transforms
-from .. import loss
+from .core import BaseNetwork, NetworkOutput, NetworkHParams
 
 
 class FreeFormFlowHParams(NetworkHParams):
@@ -32,6 +27,8 @@ class BaseFreeFormFlow(BaseNetwork, nn.Module):
         super().__init__()
         if isinstance(hparams, dict):
             self.hparams = self.hparams_type(**hparams)
+        else:
+            self.hparams = hparams
         self._dims_in = dims_in
         self._dims_out = self.hparams.bottleneck
         self.transform = transforms.constructor(self.hparams.transform, **transform_kwargs,
@@ -96,31 +93,21 @@ class BaseFreeFormFlow(BaseNetwork, nn.Module):
         return NetworkOutput(output=x, log_det_j=log_det_j, byproducts=byproducts)
 
 
-class ConstWidthHParams(subnets.ConstWidthHParams):
-    dropout: float = 0.
-    residual: bool = True
+class SubNetFreeFormFlowHParams(FreeFormFlowHParams):
+    network_class = "SubNetFreeFormFlow"
+    subnet_hparams: subnets.SubnetHParams
 
 
-class ResNetHParams(FreeFormFlowHParams):
-    network_class = "ResNet"
-    net_hparams: ConstWidthHParams | dict
-
-
-class ResNet(BaseFreeFormFlow):
-    hparams_type = ResNetHParams
-    hparams: ResNetHParams
-
+class SubNetFreeFormFlow(BaseFreeFormFlow):
     def __init__(
             self,
             dims_in: int,
-            hparams: ResNetHParams | dict,
+            hparams: SubNetFreeFormFlowHParams | dict,
             **transform_kwargs,
     ):
         super().__init__(dims_in=dims_in, hparams=hparams, **transform_kwargs)
-        self._encode = subnets.ConstWidth(dims_in=dims_in, dims_out=self.dims_out, **self.hparams.net_hparams)
-        self._decode = subnets.ConstWidth(dims_in=self.hparams.bottleneck, dims_out=dims_in, **self.hparams.net_hparams)
-
-
-class ResNetICHParams(ResNetHParams):
-    network_class = "ResNetIC"
-    normalize_angles: bool
+        subnet_hparams = self.hparams.subnet_hparams
+        subnet_class = subnet_hparams.pop("subnet_class")
+        SubNetClass = getattr(subnets, subnet_class)
+        self._encode = SubNetClass(dims_in=self.dims_in, dims_out=self.dims_out, **subnet_hparams)
+        self._decode = SubNetClass(dims_in=self.dims_out, dims_out=self.dims_in, **subnet_hparams)
