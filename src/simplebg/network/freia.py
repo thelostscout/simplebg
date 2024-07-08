@@ -77,7 +77,7 @@ class FixedBlocks(BaseFrEIA):
         Block = getattr(FrEIA.modules, hparams.coupling_block_name)
         if not Block:
             raise ValueError(f"Block {hparams.coupling_block_name} not found in FrEIA.modules.")
-        subnet_hparams = hparams.subnet_hparams
+        subnet_hparams = hparams.subnet_hparams.copy()
         subnet_class = subnet_hparams.pop("subnet_class")
         for i in range(hparams.coupling_blocks):
             self.append(

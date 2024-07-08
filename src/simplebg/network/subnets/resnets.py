@@ -9,7 +9,7 @@ class ResNetHParams(SubnetHParams):
     depth_scheme: list[int]
     width_scheme: list[int]
     batch_norm: bool = True
-    activation: nn.Module = nn.ReLU
+    activation: nn.Module = nn.ReLU()
 
 class ResNet(nn.Sequential):
     def __init__(
@@ -19,7 +19,7 @@ class ResNet(nn.Sequential):
             depth_scheme: list[int],
             width_scheme: list[int],
             batch_norm: bool = True,
-            activation: nn.Module = nn.ReLU,
+            activation: nn.Module = nn.ReLU(),
     ):
         # check if the schemes have the same length
         if len(depth_scheme) != len(width_scheme):
@@ -41,7 +41,7 @@ class NormalizerFreeResNetHParams(SubnetHParams):
     depth_scheme: list[int]
     width_scheme: list[int]
     alpha: float
-    activation: nn.Module = nn.ReLU
+    activation: nn.Module = nn.ReLU()
 
 class NormalizerFreeResNet(nn.Sequential):
     def __init__(
@@ -51,7 +51,7 @@ class NormalizerFreeResNet(nn.Sequential):
             depth_scheme: list[int],
             width_scheme: list[int],
             alpha: float,
-            activation: nn.Module = nn.ReLU,
+            activation: nn.Module = nn.ReLU(),
     ):
         # check if the schemes have the same length
         if len(depth_scheme) != len(width_scheme):
@@ -62,7 +62,7 @@ class NormalizerFreeResNet(nn.Sequential):
         for i in range(len(depth_scheme)):
             layers.append(NormalizerFreeConstWidth(depth_scheme[i], width_scheme[i], alpha, activation=activation))
             # transition block to new width
-            layers.append(activation())
+            layers.append(activation)
             if i < len(depth_scheme) - 1:
                 layers.append(ScaledWSLinear(width_scheme[i], width_scheme[i + 1], previous_activation=activation))
             # at the end, project to output dimensions

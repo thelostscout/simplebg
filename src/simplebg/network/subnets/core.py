@@ -12,7 +12,7 @@ class SubnetHParams(HParams):
 class FullyConnectedHParams(SubnetHParams):
     subnet_class = "FullyConnected"
     width: int
-    activation: nn.Module = nn.ReLU
+    activation: nn.Module = nn.ReLU()
     batch_norm: bool = False
 
 class FullyConnected(nn.Sequential):
@@ -21,7 +21,7 @@ class FullyConnected(nn.Sequential):
             dims_in: int,
             dims_out: int,
             width: int,
-            activation: nn.Module = nn.ReLU,
+            activation: nn.Module = nn.ReLU(),
             batch_norm: bool = False,
     ):
         layers = [nn.Linear(dims_in, width),

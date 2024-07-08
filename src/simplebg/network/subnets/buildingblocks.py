@@ -39,14 +39,14 @@ class ResidualBlock(nn.Sequential):
             depth: int = 1,
             residual: bool = False,
             batch_norm: bool = False,
-            activation: nn.Module = nn.ReLU,
+            activation: nn.Module = nn.ReLU(),
     ):
         self.residual = residual
         layers = []
         for i in range(depth):
             if batch_norm:
                 layers.append(nn.BatchNorm1d(width))
-            layers.append(activation())
+            layers.append(activation)
             layers.append(nn.Linear(width, width))
         super().__init__(*layers)
         # initialize weights and biases according to arXiv:1712.05577
@@ -70,7 +70,7 @@ class ConstWidth(nn.Sequential):
             block_depth: int = 2,
             residual: bool = False,
             batch_norm: bool = False,
-            activation: nn.Module = nn.ReLU,
+            activation: nn.Module = nn.ReLU(),
     ):
         layers = []
         # add residual blocks
@@ -96,13 +96,13 @@ class NormalizerFreeResidualBlock(nn.Sequential):
             alpha: float,
             beta: float,
             depth: int = 1,
-            activation: nn.Module = nn.ReLU,
+            activation: nn.Module = nn.ReLU(),
     ):
         self.alpha = alpha
         self.beta = beta
         layers = []
         for i in range(depth):
-            layers.append(activation())
+            layers.append(activation)
             layers.append(ScaledWSLinear(width, width, bias=True, previous_activation=activation))
         super().__init__(*layers)
         # initialize weights and biases according to arXiv:1712.05577
@@ -122,7 +122,7 @@ class NormalizerFreeConstWidth(nn.Sequential):
             width: int,
             alpha: float,
             block_depth: int = 2,
-            activation: nn.Module = nn.ReLU,
+            activation: nn.Module = nn.ReLU(),
     ):
         layers = []
         expected_var = 1.

@@ -99,6 +99,8 @@ class SubNetFreeFormFlowHParams(FreeFormFlowHParams):
 
 
 class SubNetFreeFormFlow(BaseFreeFormFlow):
+    hparams: SubNetFreeFormFlowHParams
+    hparams_type = SubNetFreeFormFlowHParams
     def __init__(
             self,
             dims_in: int,
@@ -106,7 +108,7 @@ class SubNetFreeFormFlow(BaseFreeFormFlow):
             **transform_kwargs,
     ):
         super().__init__(dims_in=dims_in, hparams=hparams, **transform_kwargs)
-        subnet_hparams = self.hparams.subnet_hparams
+        subnet_hparams = self.hparams.subnet_hparams.copy()
         subnet_class = subnet_hparams.pop("subnet_class")
         SubNetClass = getattr(subnets, subnet_class)
         self._encode = SubNetClass(dims_in=self.dims_in, dims_out=self.dims_out, **subnet_hparams)

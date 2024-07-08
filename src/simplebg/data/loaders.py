@@ -207,4 +207,4 @@ class ToyLoader(Loader):
         if self.hparams.name == "MoonsDataset" or self.hparams.name == "CirclesDataset":
             return 2
         else:
-            return self.hparams.kwargs["dims"]
+            return self.hparams.kwargs["dimensions"]
