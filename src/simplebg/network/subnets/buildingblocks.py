@@ -7,6 +7,7 @@ class ScaledWSLinear(nn.Linear):
     Linear layer with Scaled Weight Standardization.
     Implementation adapted from Conv2D implementation with scaled weights in arXiv:2101.08692
     """
+
     @staticmethod
     def calculate_gain(activation, size):
         y = activation(torch.randn(size))
@@ -23,14 +24,15 @@ class ScaledWSLinear(nn.Linear):
 
     def get_weight(self):
         # Get Scaled WS weight OIHW;
-        weight = ((self.weight - self.weight.mean(dim=1)) /
-                  torch.sqrt(self.weight.var(dim=1) * self.weight.shape[1] + self.eps))
+        weight = ((self.weight - self.weight.mean(dim=0)) /
+                  torch.sqrt(self.weight.var(dim=0) * self.weight.shape[0] + self.eps))
         if self.gain is not None:
             weight = weight * self.gain
         return weight
 
     def forward(self, x):
         return nn.functional.linear(x, self.get_weight(), self.bias)
+
 
 class ResidualBlock(nn.Sequential):
     def __init__(
@@ -90,6 +92,7 @@ class NormalizerFreeResidualBlock(nn.Sequential):
     Implementation of a normalizer-free residual block with Scaled Weight Standardization.
     Follows the archictecture implemented in arXiv:2101.08692
     """
+
     def __init__(
             self,
             width: int,
@@ -97,13 +100,17 @@ class NormalizerFreeResidualBlock(nn.Sequential):
             beta: float,
             depth: int = 1,
             activation: nn.Module = nn.ReLU(),
+            scaled_weights: bool = True,
     ):
         self.alpha = alpha
         self.beta = beta
         layers = []
         for i in range(depth):
             layers.append(activation)
-            layers.append(ScaledWSLinear(width, width, bias=True, previous_activation=activation))
+            if scaled_weights:
+                layers.append(ScaledWSLinear(width, width, previous_activation=activation))
+            else:
+                layers.append(nn.Linear(width, width))
         super().__init__(*layers)
         # initialize weights and biases according to arXiv:1712.05577
         for m in self.modules():
@@ -123,13 +130,14 @@ class NormalizerFreeConstWidth(nn.Sequential):
             alpha: float,
             block_depth: int = 2,
             activation: nn.Module = nn.ReLU(),
+            scaled_weights: bool = True,
     ):
         layers = []
         expected_var = 1.
         # add residual blocks
         for i in range(depth):
             layers.append(
-                NormalizerFreeResidualBlock(width, alpha, beta=expected_var**.5, depth=block_depth,
-                                            activation=activation))
+                NormalizerFreeResidualBlock(width, alpha, beta=expected_var ** .5, depth=block_depth,
+                                            activation=activation, scaled_weights=scaled_weights))
             expected_var += alpha ** 2
         super().__init__(*layers)

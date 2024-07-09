@@ -26,7 +26,7 @@ def compute_losses(
         nn: network.BaseNetwork,
         latent_distribution: latent.BaseDistribution,
         loss_weights: LossWeights,
-        training: bool,
+        progress: float,
         nn_kwargs=None,
         **kwargs,
 ):
@@ -40,10 +40,13 @@ def compute_losses(
         forward_kl = kl.forward_kl(forward_pass.output, forward_pass.log_det_j, latent_distribution).mean()
         loss_dict["forward_kl"] = forward_kl
     if "reverse_kl" in active:
-        z_generated = latent_distribution.sample((x.shape[0],))
-        reverse_pass = nn.reverse(z_generated, jac=True, **nn_kwargs)
-        reverse_kl = kl.reverse_kl(reverse_pass.output, reverse_pass.log_det_j, kwargs["energy_function"]).mean()
-        loss_dict["reverse_kl"] = reverse_kl
+        if progress > .5:
+            z_generated = latent_distribution.sample((x.shape[0],))
+            reverse_pass = nn.reverse(z_generated, jac=True, **nn_kwargs)
+            reverse_kl = kl.reverse_kl(reverse_pass.output, reverse_pass.log_det_j, kwargs["energy_function"]).mean()
+            loss_dict["reverse_kl"] = reverse_kl
+        else:
+            loss_dict["reverse_kl"] = torch.tensor(0.).to(x.device)
     if "reconstruction" in active:
         if forward_pass:
             if forward_pass.byproducts:

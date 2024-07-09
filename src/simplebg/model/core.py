@@ -51,8 +51,8 @@ class BaseModel(lt.trainable.Trainable):
         # TODO: this is still ugly, maybe find something better?
         if type(batch) is list:
             batch = batch[0]
-        total_loss, loss_dict = loss.compute_losses(batch, self.nn, self.q, self.hparams.loss_weights,
-                                                    training=self.training, **kwargs)
+        progress = self.current_epoch / self.hparams.max_epochs
+        total_loss, loss_dict = loss.compute_losses(batch, self.nn, self.q, self.hparams.loss_weights, progress, **kwargs)
         return dict(loss=total_loss, **loss_dict)
 
     def log_prob(self, x):

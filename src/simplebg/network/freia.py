@@ -18,13 +18,6 @@ class BaseFrEIAHParams(core.NetworkHParams):
     network_module = "freia"
 
 
-class FixedBlocksHParams(BaseFrEIAHParams):
-    network_class = "FixedBlocks"
-    subnet_hparams: subnets.SubnetHParams
-    coupling_blocks: int
-    coupling_block_name: str
-
-
 class BaseFrEIA(core.BaseNetwork, SequenceINN):
     hparams_type = BaseFrEIAHParams
     hparams: BaseFrEIAHParams
@@ -69,6 +62,13 @@ class BaseFrEIA(core.BaseNetwork, SequenceINN):
         raise NotImplementedError
 
 
+class FixedBlocksHParams(BaseFrEIAHParams):
+    network_class = "FixedBlocks"
+    subnet_hparams: subnets.SubnetHParams
+    coupling_blocks: int
+    coupling_block_name: str
+
+
 class FixedBlocks(BaseFrEIA):
     hparams_type = FixedBlocksHParams
     hparams: FixedBlocksHParams
@@ -84,7 +84,7 @@ class FixedBlocks(BaseFrEIA):
                 module_class=Block,
                 subnet_constructor=partial(
                     subnet_constructor,
-                    subnet_name=subnet_class,
+                    subnet_class=subnet_class,
                     **subnet_hparams
                 ),
             )

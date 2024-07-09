@@ -15,6 +15,7 @@ class FullyConnectedHParams(SubnetHParams):
     activation: nn.Module = nn.ReLU()
     batch_norm: bool = False
 
+
 class FullyConnected(nn.Sequential):
     def __init__(
             self,

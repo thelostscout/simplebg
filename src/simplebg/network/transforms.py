@@ -1,3 +1,5 @@
+import numpy
+import numpy as np
 import torch
 from torch import nn
 
@@ -8,6 +10,7 @@ from lightning_trainable.hparams import AttributeDict
 
 class Transform(nn.Module):
     def forward(self, input: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+        # shapes should be same as input for output and batch_size for log_det_j
         raise NotImplementedError
 
     def reverse(self, input: torch.Tensor) -> (torch.Tensor, torch.Tensor):
@@ -30,24 +33,25 @@ class InverseTransform(Transform):
 
 class IdentityTransform(Transform):
     def forward(self, input: torch.Tensor) -> (torch.Tensor, torch.Tensor):
-        return input, torch.zeros_like(input)
+        return input, torch.zeros((input.shape[0],), device=input.device, dtype=input.dtype, layout=input.layout,
+                                  requires_grad=input.requires_grad)
 
     def reverse(self, input: torch.Tensor) -> (torch.Tensor, torch.Tensor):
-        return input, torch.zeros_like(input)
+        return input, torch.zeros((input.shape[0],), device=input.device, dtype=input.dtype, layout=input.layout,
+                                  requires_grad=input.requires_grad)
 
 
 class GlobalInternalCoordinateTransformation(Transform):
     def __init__(
             self,
             system: bgmol.systems.OpenMMSystem,
-            normalize_angles: bool = True,
     ):
         super().__init__()
         zfactory = bgmol.zmatrix.ZMatrixFactory(system.mdtraj_topology)
         zmatrix, fixed_atoms = zfactory.build_naive()
         self._bg_layer = bgflow.GlobalInternalCoordinateTransformation(
             zmatrix,
-            normalize_angles=normalize_angles,
+            normalize_angles=True,
             raise_warnings=True,
         )
 
@@ -98,6 +102,9 @@ class GlobalInternalCoordinateTransformation(Transform):
     def reverse(self, input: torch.Tensor) -> (torch.Tensor, torch.Tensor):
         split_dims = [self.dim_bonds, self.dim_angles, self.dim_torsions, 3, 3]
         bonds, angles, torsions, x0, R = torch.split(input, split_dims, dim=-1)
+        # need to project input onto [0,1] interval for normalised angles through modulo operation
+        angles, torsions = torch.remainder(angles, 1), torch.remainder(torsions, 1)
+        R = torch.remainder(R, 1)
         output, log_det_j = self._bg_layer._inverse(bonds, angles, torsions, x0.unsqueeze(-2), R)
         return output, log_det_j.squeeze(-1)
 

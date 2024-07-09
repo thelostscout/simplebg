@@ -19,6 +19,6 @@ def reverse_kl(
 ):
     energies = target_energy(x_generated).squeeze(-1)
     # Clamp energies to avoid numerical issues
-    capped_energies = torch.nan_to_num(energies, nan=1e6)
-    capped_determinants = torch.clamp(log_det_j_samples, min=-1e6, max=1e6)
-    return - (capped_energies + capped_determinants)
+    capped_energies = torch.clamp(torch.nan_to_num(energies, nan=0.), max=1e6)
+    capped_determinants = torch.clamp(torch.nan_to_num(log_det_j_samples, nan=0.), max=1e6)
+    return - (capped_energies + log_det_j_samples)

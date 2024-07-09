@@ -4,8 +4,8 @@ import sys
 import warnings
 import simplebg
 
-default_rel_params_path = "../../params/"
-default_rel_logs_path = "../../logs/"
+default_rel_params_path = os.path.join(simplebg.utils.path.get_default_path(), "params")
+default_rel_logs_path = os.path.join(simplebg.utils.path.get_default_path(), "logs")
 
 
 def main():
@@ -14,7 +14,7 @@ def main():
     # if no absolute path is provided, assume it is relative to the default params path and hence add the default
     # param path in front
     if not os.path.isabs(param_path):
-        param_path = default_rel_params_path + param_path
+        param_path = os.path.join(default_rel_params_path, param_path)
     # importlib magic
     spec = importlib.util.spec_from_file_location("params", param_path)
     params = importlib.util.module_from_spec(spec)
@@ -32,7 +32,7 @@ def main():
     if logger_kwargs is not None:
         save_dir = logger_kwargs.get("save_dir", "")
         if not os.path.isabs(save_dir):
-            save_dir = default_rel_logs_path + save_dir
+            save_dir = os.path.join(default_rel_logs_path, save_dir)
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         logger_kwargs["save_dir"] = save_dir

@@ -1,5 +1,7 @@
 import os
 import random
+import warnings
+
 from torch import Tensor
 import mdtraj as md
 import yaml
@@ -12,6 +14,7 @@ from lightning_trainable.hparams import HParams, AttributeDict
 from lightning_trainable.hparams.types import Choice
 
 from ..utils.peptide import peptide
+from .. utils.path import get_default_path
 from .dataset import PeptideCCDataset
 
 datasets = namedtuple("datasets", ["train", "val", "test"])
@@ -25,6 +28,7 @@ def load_from_bgmol(
     if not os.path.exists(root):
         os.makedirs(root)
     # extract filename from url and replace .tgz with .npy
+    # TODO: this handling of path might cause issues with different operating systems. Should do a OS agnostic method
     path = os.path.join(root, DataSetClass.url.split("/")[-1].replace(".tgz", ".npy"))
     download = not os.path.exists(path)
     dataset = DataSetClass(root=root, download=download, read=True)
@@ -106,6 +110,17 @@ class PeptideLoaderHParams(LoaderHParams):
     root: str
     name: str
     method: Choice("bgmol", "h5")
+
+    @classmethod
+    def validate_parameters(cls, hparams: AttributeDict) -> AttributeDict:
+        hparams = super().validate_parameters(hparams)
+        if not os.path.abspath(hparams.root):
+            default_data_path = os.path.join(get_default_path(), "data")
+            root = os.path.join(default_data_path, hparams.root)
+            warnings.warn(f"root path '{hparams.root}' is not an absolute path. Default data path '{default_data_path}'"
+                          f" is assumed.")
+            hparams.root = root
+        return hparams
 
 
 class PeptideLoader(Loader):

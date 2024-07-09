@@ -10,7 +10,6 @@ class FreeFormFlowHParams(NetworkHParams):
     network_module = "fff"
     bottleneck: int
     transform: str = "identity"
-    transform_kwargs: dict = dict()
 
 
 class BaseFreeFormFlow(BaseNetwork, nn.Module):
@@ -31,8 +30,7 @@ class BaseFreeFormFlow(BaseNetwork, nn.Module):
             self.hparams = hparams
         self._dims_in = dims_in
         self._dims_out = self.hparams.bottleneck
-        self.transform = transforms.constructor(self.hparams.transform, **transform_kwargs,
-                                                **self.hparams.transform_kwargs)
+        self.transform = transforms.constructor(self.hparams.transform, **transform_kwargs,)
 
     @property
     def dims_in(self):
@@ -101,6 +99,7 @@ class SubNetFreeFormFlowHParams(FreeFormFlowHParams):
 class SubNetFreeFormFlow(BaseFreeFormFlow):
     hparams: SubNetFreeFormFlowHParams
     hparams_type = SubNetFreeFormFlowHParams
+
     def __init__(
             self,
             dims_in: int,

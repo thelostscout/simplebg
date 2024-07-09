@@ -1,42 +1,39 @@
+from torch import nn
+
 from simplebg.data import PeptideLoaderHParams
 from simplebg.latent import DistributionHParams
 from simplebg.loss.core import LossWeights
 from simplebg.model import PeptideHParams
-from simplebg.network.freia import RNVPConstWidthHParams
-from simplebg.network.fff import ResNetHParams, ConstWidthHParams as ResNetConstWidthHParams
-from simplebg.network.subnets import ConstWidthHParams
+from simplebg.network.freia import FixedBlocksHParams
+from simplebg.network.fff import SubNetFreeFormFlowHParams
+from simplebg.network.subnets import FullyConnectedHParams, ResNetHParams, NormalizerFreeResNetHParams
 
-freia_network_hparams = RNVPConstWidthHParams(
+freia_network_hparams = FixedBlocksHParams(
     coupling_blocks=12,
-    subnet_hparams=ConstWidthHParams(
-        depth=3,
-        width=512,
-        block_depth=2,
-        dropout=0.,
-        residual=True,
+    coupling_block_name="AllInOneBlock",
+    subnet_hparams=ResNetHParams(
+        depth_scheme=[3],
+        width_scheme=[512],
+        batch_norm=False,
+        activation=nn.ReLU(),
     )
 )
 
-resnet_network_hparams = ResNetHParams(
+resnet_network_hparams = SubNetFreeFormFlowHParams(
     bottleneck=66,
-    net_hparams=ResNetConstWidthHParams(
-        depth=31,
-        width=512,
-        block_depth=2,
-        dropout=0.,
-        residual=True,
-        batch_norm=False,
+    subnet_hparams=NormalizerFreeResNetHParams(
+        depth_scheme=[10, 10, 10],
+        width_scheme=[512, 256, 512],
+        alpha=1.,
+        scaled_weights=False,
     ),
     transform="ic",
-    transform_kwargs=dict(
-        normalize_angles=True
-    )
 )
 
 hparams = PeptideHParams(
     loader_hparams=PeptideLoaderHParams(
         name="Ala2TSF300",
-        root="../../data/",
+        root="ala2",
         method="bgmol",
         train_split=0.7,
         val_split=0.05,
@@ -51,9 +48,9 @@ hparams = PeptideHParams(
     loss_weights=LossWeights(
         forward_kl=1.,
         reconstruction=1_000.,
-        # reverse_kl=.001,
+        reverse_kl=.001,
     ),
-    max_epochs=20,
+    max_epochs=200,
     batch_size=5000,
     lr_scheduler="OneCycleLR",
     optimizer=dict(
@@ -62,8 +59,8 @@ hparams = PeptideHParams(
         betas=[.99, .9999],
     ),
     accelerator="auto",
-    gradient_clip=10.,
-    track_grad_norm=2,
+    gradient_clip=100.,
+    # track_grad_norm=2,
 )
 
 trainer_kwargs = {"fast_dev_run": False, "enable_progress_bar": False}
