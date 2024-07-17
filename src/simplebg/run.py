@@ -25,8 +25,8 @@ def main():
     ModelClass = getattr(simplebg.model, params.hparams.model_class)
     model = ModelClass(hparams=params.hparams)
     # need trainer_kwargs and logger_kwargs from params as well
-    trainer_kwargs = getattr(params, "trainer_kwargs")
-    logger_kwargs = getattr(params, "logger_kwargs")
+    trainer_kwargs = getattr(params, "trainer_kwargs", None)
+    logger_kwargs = getattr(params, "logger_kwargs", None)
     # quality of life: if no absolute logger path is provided, assume it is relative to the default logs path and
     # hence add the default param path in front
     if logger_kwargs is not None:

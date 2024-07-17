@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 
+import bgflow
 import torch
 import torch.distributions as D
 from torch import Tensor
 
+import bgflow
 from lightning_trainable.hparams import HParams
 
 
@@ -34,3 +36,17 @@ class Normal(D.MultivariateNormal):
             if sigma.shape != (dims,):
                 raise ValueError(f"sigma must have shape ({dims},), but has shape {sigma.shape}.")
         super().__init__(loc=torch.zeros(dims), covariance_matrix=torch.diag(sigma ** 2))
+
+
+class PriorWrapper(BaseDistribution):
+    def __init__(
+            self,
+            prior: bgflow.ProductDistribution,
+    ):
+        self._prior = prior
+
+    def sample(self, n_samples: int) -> tuple[torch.Tensor, ...]:
+        return self._prior.sample(n_samples)
+
+    def log_prob(self, value: tuple[torch.Tensor, ...]) -> torch.Tensor:
+        return self._prior.energy(*value)
