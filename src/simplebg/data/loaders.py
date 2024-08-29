@@ -13,7 +13,7 @@ import lightning_trainable as lt
 from lightning_trainable.hparams import HParams, AttributeDict
 from lightning_trainable.hparams.types import Choice
 
-from ..utils.peptide import peptide
+from ..utils.peptide import Peptide
 from .. utils.path import get_default_path
 from .dataset import PeptideCCDataset
 
@@ -57,7 +57,7 @@ def load_from_h5(
     with open(os.path.join(molecule_path, "info.yaml"), 'r') as file:
         info = yaml.load(file, yaml.FullLoader)
 
-    system = peptide(short=False, n_atoms=n_atoms, n_res=n_res, filepath=molecule_path)
+    system = Peptide(short=False, n_atoms=n_atoms, n_res=n_res, filepath=molecule_path)
     traj = md.load_hdf5(os.path.join(root, "traj.h5"))
     xyz = traj.xyz
     if not xyz.shape[-2] == n_atoms:

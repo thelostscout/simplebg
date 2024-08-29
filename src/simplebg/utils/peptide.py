@@ -9,11 +9,11 @@ import mdtraj as md
 import numpy
 _, unit, app = import_openmm()
 
-__all__ = ["peptide"]
+__all__ = ["Peptide"]
 
 
-class peptide(OpenMMSystem):
-    """1b5j trimer with #TODO force field in implicit solvent.
+class Peptide(OpenMMSystem):
+    """1b5j trimer with force field in implicit solvent.
 
     Attributes
     ----------
@@ -28,6 +28,7 @@ class peptide(OpenMMSystem):
 
     Notes
     -----
+    Implementation by Marcel Meyer and Michelle Emmerich.
     TODO: positions, maybe?, TICA
     """
 

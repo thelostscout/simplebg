@@ -5,7 +5,7 @@ from simplebg.latent import DistributionHParams
 from simplebg.loss.core import LossWeights
 from simplebg.model import PeptideHParams
 from simplebg.network.freia import FixedBlocksHParams
-from simplebg.network.fff import SubNetFreeFormFlowHParams
+from simplebg.network.fff import SubNetFlowHParams
 from simplebg.network.subnets import FullyConnectedHParams, ResNetHParams, NormalizerFreeResNetHParams
 
 freia_network_hparams = FixedBlocksHParams(
@@ -19,7 +19,7 @@ freia_network_hparams = FixedBlocksHParams(
     )
 )
 
-resnet_network_hparams = SubNetFreeFormFlowHParams(
+resnet_network_hparams = SubNetFlowHParams(
     bottleneck=66,
     subnet_hparams=NormalizerFreeResNetHParams(
         depth_scheme=[10, 10, 10],

@@ -3,20 +3,20 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lightning_bg"
+name = "simplebg"
 version = "0.1.0"
 description = "A high-level library to make the training of Boltzmann Generators simple and reproducible."
 #readme = "README.md"
 requires-python = ">=3.10"
-#license = { file = "LICENSE" }
+license = { file = "LICENSE" }
 keywords = ["Machine-Learning", "PyTorch-Lightning", "Boltzmann Generators"]
 
 authors = [
-    { name = "Frederik Kortkamp", email = "kortkamp@stud.uni-heidelberg.de" }
+    { name = "TheLostScout" }
 ]
 
 maintainers = [
-    { name = "Frederik Kortkamp", email = "kortkamp@stud.uni-heidelberg.de" }
+    { name = "TheLostScout" }
 ]
 
 classifiers = [
@@ -25,19 +25,21 @@ classifiers = [
     "Environment :: GPU :: NVIDIA CUDA :: 12",
     "Intended Audience :: Molecular Scientists",
     "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
 dependencies = [
+    "mdtraj",
     # lightning-trainable
-    "lightning-trainable@git+https://github.com/LarsKue/lightning-trainable",
+    "lightning-trainable@git+https://github.com/LarsKue/lightning-trainable ~= 0.3",
     # FrEIA
-    "freia@git+https://github.com/vislearn/FrEIA",
+    "freia@git+https://github.com/vislearn/FrEIA ~= 0.2",
     # bgmol & bgflow
-    "bgflow@git+https://github.com/noegroup/bgflow",
-    "bgmol@git+https://github.com/noegroup/bgmol",
+    "bgflow@git+https://github.com/noegroup/bgflow ~= 0.3",
+    "bgmol@git+https://github.com/noegroup/bgmol ~= 0.2",
 ]
 [project.urls]
-"Homepage" = "https://github.com/thelostscout/lightning_bg"
+"Homepage" = "https://github.com/thelostscout/simplebg"
 
